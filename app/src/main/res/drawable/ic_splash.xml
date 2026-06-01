@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Adaptive icon foreground: the GoatTracker neon goat / performance-chart mark.
-     Coordinates are baked into the 512 design space (the SVG group translate(106,106)
-     is folded into each point) and centred well inside the adaptive safe zone. -->
+<!-- Splash screen icon: the neon goat mark, sized to sit inside the system splash
+     icon keyline (content within the centre two-thirds of the canvas). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
-    android:width="108dp"
-    android:height="108dp"
+    android:width="288dp"
+    android:height="288dp"
     android:viewportWidth="512"
     android:viewportHeight="512">
 

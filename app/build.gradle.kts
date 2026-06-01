@@ -5,10 +5,10 @@ plugins {
 }
 
 android {
-    namespace = "com.example.onairtracker"
+    namespace = "com.example.goattracker"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.example.onairtracker"
+        applicationId = "com.example.goattracker"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -50,6 +50,7 @@ dependencies {
 
   // Core Android dependencies
   implementation(libs.androidx.core.ktx)
+  implementation(libs.androidx.core.splashscreen)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)
 

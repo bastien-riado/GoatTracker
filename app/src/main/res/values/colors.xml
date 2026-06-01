@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App background (Bg token) — used as the splash screen window background. -->
+    <color name="splash_background">#FF050505</color>
+</resources>

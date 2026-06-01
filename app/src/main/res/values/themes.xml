@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.OnAirTracker" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Main application theme, applied once the splash screen is dismissed. -->
+    <style name="Theme.GoatTracker" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Launch theme: the AndroidX core-splashscreen system splash.
+         Shows the neon goat on the dark app background while the app loads,
+         then hands off to Theme.GoatTracker (the home screen). -->
+    <style name="Theme.GoatTracker.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="postSplashScreenTheme">@style/Theme.GoatTracker</item>
+    </style>
 </resources>

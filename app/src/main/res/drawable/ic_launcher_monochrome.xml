@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome layer for themed (Material You) icons on Android 13+.
+     The fill colour is ignored by the system and replaced with the themed tint;
+     only the silhouette/alpha matters. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512"
+    android:tint="#000000">
+    <path
+        android:pathData="M166,286 L216,196 L256,246 L316,146"
+        android:strokeColor="#000000"
+        android:strokeWidth="24"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M346,286 L296,196 L256,246"
+        android:strokeColor="#000000"
+        android:strokeWidth="24"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M256,256 L196,366 L316,366 Z"
+        android:strokeColor="#000000"
+        android:strokeWidth="24"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M316,146 m-16,0 a16,16 0 1,0 32,0 a16,16 0 1,0 -32,0 Z"
+        android:fillColor="#000000" />
+</vector>

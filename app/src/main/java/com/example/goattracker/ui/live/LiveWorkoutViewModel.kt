@@ -1,0 +1,434 @@
+package com.example.goattracker.ui.live
+
+import android.content.Context
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.goattracker.data.DataRepository
+import com.example.goattracker.domain.model.*
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.util.UUID
+
+data class LiveWorkoutUiState(
+    val activeSession: WorkoutSession? = null,
+    val elapsedSeconds: Int = 0,
+    val timerRemainingSeconds: Int? = null,
+    val isRestTimerVibrating: Boolean = false,
+    val isFinishModalOpen: Boolean = false,
+    val isExercisePickerOpen: Boolean = false,
+    val availableExercises: List<Exercise> = emptyList(),
+    val totalCompletedSets: Int = 0,
+    val totalExercises: Int = 0,
+    val plannedExercisesCount: Int = 0,
+    val plannedSetsCount: Int = 0,
+    val completedExercisesCount: Int = 0,
+    val completedSetsCount: Int = 0
+)
+
+class LiveWorkoutViewModel(
+    private val dataRepository: DataRepository,
+    private val applicationContext: Context? = null
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(LiveWorkoutUiState())
+    val uiState: StateFlow<LiveWorkoutUiState> = _uiState.asStateFlow()
+
+    private var elapsedTimerJob: Job? = null
+    private var timerObserverJob: Job? = null
+
+    private var allSessions: List<WorkoutSession> = emptyList()
+
+    init {
+        viewModelScope.launch {
+            dataRepository.workoutState.collect { state ->
+                allSessions = state.sessions
+                _uiState.update { it.copy(availableExercises = state.exercises) }
+            }
+        }
+
+        // Observe the global RestTimerManager state and reflect it in the UI
+        timerObserverJob = viewModelScope.launch {
+            RestTimerManager.state.collect { timerState ->
+                when (timerState) {
+                    is RestTimerState.Counting -> {
+                        // Start a local countdown display loop
+                        launchCountdownLoop()
+                    }
+                    is RestTimerState.Finished -> {
+                        _uiState.update {
+                            it.copy(timerRemainingSeconds = 0, isRestTimerVibrating = true)
+                        }
+                    }
+                    is RestTimerState.Idle -> {
+                        _uiState.update {
+                            it.copy(timerRemainingSeconds = null, isRestTimerVibrating = false)
+                        }
+                        countdownDisplayJob?.cancel()
+                    }
+                }
+            }
+        }
+    }
+
+    private var countdownDisplayJob: Job? = null
+
+    private fun launchCountdownLoop() {
+        countdownDisplayJob?.cancel()
+        countdownDisplayJob = viewModelScope.launch {
+            while (true) {
+                val remaining = RestTimerManager.getRemainingSeconds()
+                if (remaining <= 0) {
+                    // Don't set finished here — let the Manager/Receiver handle the transition
+                    break
+                }
+                _uiState.update {
+                    it.copy(timerRemainingSeconds = remaining, isRestTimerVibrating = false)
+                }
+                if (applicationContext == null) {
+                    // In a JVM unit test, wall clock System.currentTimeMillis() does not advance
+                    // with virtual delay(), so break immediately to prevent infinite loop.
+                    break
+                }
+                delay(500)
+            }
+        }
+    }
+
+    fun startNewSession() {
+        // Cancel any existing timers from previous session
+        elapsedTimerJob?.cancel()
+        val context = applicationContext
+        if (context != null) {
+            RestTimerManager.cancelAll(context)
+            RestTimerService.stop(context)
+        } else {
+            RestTimerManager.acknowledgeForTesting()
+        }
+
+        val newSession = WorkoutSession(
+            name = "Séance du ${getCurrentDateString()}",
+            exercises = emptyList()
+        )
+        _uiState.update {
+            LiveWorkoutUiState(
+                activeSession = newSession,
+                availableExercises = it.availableExercises
+            )
+        }
+        startElapsedTimer()
+    }
+
+    // --- Elapsed Timer (counts UP from 0) ---
+
+    private fun startElapsedTimer() {
+        elapsedTimerJob?.cancel()
+        elapsedTimerJob = viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                _uiState.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
+            }
+        }
+    }
+
+    // --- Exercise Management ---
+
+    fun addExerciseToSession(exercise: Exercise) {
+        val currentSession = _uiState.value.activeSession ?: return
+
+        // Don't add duplicate exercises to the session
+        if (currentSession.exercises.any { it.exercise.id == exercise.id }) return
+
+        // Check if exercise has already been performed in previous sessions
+        val lastSessionWithExercise = allSessions
+            .filter { session -> session.exercises.any { it.exercise.id == exercise.id } }
+            .maxByOrNull { it.startTime }
+
+        val previousExerciseSession = lastSessionWithExercise?.exercises
+            ?.firstOrNull { it.exercise.id == exercise.id }
+
+        val previousCompletedSets = previousExerciseSession?.sets?.filter { it.isCompleted } ?: emptyList()
+
+        val newExerciseSession = if (previousCompletedSets.isNotEmpty()) {
+            // Prefill with previous session completed sets
+            val prefilledSets = previousCompletedSets.mapIndexed { index, oldSet ->
+                WorkoutSet(
+                    id = UUID.randomUUID().toString(),
+                    setNumber = index + 1,
+                    weight = oldSet.weight,
+                    reps = oldSet.reps,
+                    durationSeconds = oldSet.durationSeconds,
+                    distanceKm = oldSet.distanceKm,
+                    isCompleted = false
+                )
+            }
+            ExerciseSession(
+                exercise = exercise,
+                sets = prefilledSets
+            )
+        } else {
+            // Fallback to default hardcoded values (2 sets)
+            val defaultSet1 = when (exercise.trackingType) {
+                TrackingType.WEIGHT_REPS -> WorkoutSet(setNumber = 1, weight = 20.0, reps = 10)
+                TrackingType.BODYWEIGHT_REPS -> WorkoutSet(setNumber = 1, reps = 8)
+                TrackingType.TIME -> WorkoutSet(setNumber = 1, durationSeconds = 60)
+                TrackingType.DISTANCE -> WorkoutSet(setNumber = 1, distanceKm = 1.0)
+            }
+
+            val defaultSet2 = when (exercise.trackingType) {
+                TrackingType.WEIGHT_REPS -> WorkoutSet(setNumber = 2, weight = 20.0, reps = 10)
+                TrackingType.BODYWEIGHT_REPS -> WorkoutSet(setNumber = 2, reps = 8)
+                TrackingType.TIME -> WorkoutSet(setNumber = 2, durationSeconds = 60)
+                TrackingType.DISTANCE -> WorkoutSet(setNumber = 2, distanceKm = 1.0)
+            }
+
+            ExerciseSession(
+                exercise = exercise,
+                sets = listOf(defaultSet1, defaultSet2)
+            )
+        }
+
+        val updatedSession = currentSession.copy(
+            exercises = currentSession.exercises + newExerciseSession
+        )
+
+        updateSessionState(updatedSession)
+    }
+
+    fun removeExerciseFromSession(exerciseId: String) {
+        val currentSession = _uiState.value.activeSession ?: return
+        val updatedSession = currentSession.copy(
+            exercises = currentSession.exercises.filter { it.exercise.id != exerciseId }
+        )
+        updateSessionState(updatedSession)
+    }
+
+    fun addSetToExercise(exerciseId: String) {
+        val currentSession = _uiState.value.activeSession ?: return
+        val exerciseSession = currentSession.exercises.firstOrNull { it.exercise.id == exerciseId } ?: return
+
+        val lastSet = exerciseSession.sets.lastOrNull()
+        val nextSetNumber = (lastSet?.setNumber ?: 0) + 1
+
+        // Pre-populate with previous set values for perfect UX
+        val newSet = lastSet?.copy(
+            id = UUID.randomUUID().toString(),
+            setNumber = nextSetNumber,
+            isCompleted = false
+        ) ?: WorkoutSet(setNumber = nextSetNumber)
+
+        val updatedExercises = currentSession.exercises.map {
+            if (it.exercise.id == exerciseId) {
+                it.copy(sets = it.sets + newSet)
+            } else {
+                it
+            }
+        }
+
+        updateSessionState(currentSession.copy(exercises = updatedExercises))
+    }
+
+    fun deleteSetFromExercise(exerciseId: String, setId: String) {
+        val currentSession = _uiState.value.activeSession ?: return
+
+        val updatedSets = currentSession.exercises
+            .firstOrNull { it.exercise.id == exerciseId }
+            ?.sets
+            ?.filter { it.id != setId }
+            ?.mapIndexed { index, workoutSet ->
+                workoutSet.copy(setNumber = index + 1)
+            } ?: return
+
+        val updatedExercises = currentSession.exercises.map {
+            if (it.exercise.id == exerciseId) {
+                it.copy(sets = updatedSets)
+            } else {
+                it
+            }
+        }
+
+        updateSessionState(currentSession.copy(exercises = updatedExercises))
+    }
+
+    fun updateSetValues(
+        exerciseId: String,
+        setId: String,
+        weight: Double? = null,
+        reps: Int? = null,
+        durationSeconds: Int? = null,
+        distanceKm: Double? = null
+    ) {
+        val currentSession = _uiState.value.activeSession ?: return
+
+        val updatedExercises = currentSession.exercises.map { exSession ->
+            if (exSession.exercise.id == exerciseId) {
+                val updatedSets = exSession.sets.map { set ->
+                    if (set.id == setId) {
+                        set.copy(
+                            weight = weight ?: set.weight,
+                            reps = reps ?: set.reps,
+                            durationSeconds = durationSeconds ?: set.durationSeconds,
+                            distanceKm = distanceKm ?: set.distanceKm
+                        )
+                    } else {
+                        set
+                    }
+                }
+                exSession.copy(sets = updatedSets)
+            } else {
+                exSession
+            }
+        }
+
+        updateSessionState(currentSession.copy(exercises = updatedExercises))
+    }
+
+    fun toggleSetCompletion(exerciseId: String, setId: String) {
+        val currentSession = _uiState.value.activeSession ?: return
+        var startRestTimer = false
+        var restTimeForExercise = 90 // default fallback
+
+        val updatedExercises = currentSession.exercises.map { exSession ->
+            if (exSession.exercise.id == exerciseId) {
+                val updatedSets = exSession.sets.map { set ->
+                    if (set.id == setId) {
+                        val newCompletedState = !set.isCompleted
+                        if (newCompletedState) {
+                            startRestTimer = true
+                            restTimeForExercise = exSession.exercise.restTimeSeconds
+                        }
+                        set.copy(isCompleted = newCompletedState)
+                    } else {
+                        set
+                    }
+                }
+                exSession.copy(sets = updatedSets)
+            } else {
+                exSession
+            }
+        }
+
+        updateSessionState(currentSession.copy(exercises = updatedExercises))
+
+        if (startRestTimer) {
+            startRestTimer(restTimeForExercise)
+        }
+    }
+
+    // --- Session Finish Flow ---
+
+    fun requestFinishSession() {
+        _uiState.update { it.copy(isFinishModalOpen = true) }
+    }
+
+    fun dismissFinishModal() {
+        _uiState.update { it.copy(isFinishModalOpen = false) }
+    }
+
+    fun confirmSaveSession() {
+        val currentSession = _uiState.value.activeSession ?: return
+
+        // Stop all timers
+        elapsedTimerJob?.cancel()
+        val context = applicationContext
+        if (context != null) {
+            RestTimerManager.cancelAll(context)
+            RestTimerService.stop(context)
+        } else {
+            RestTimerManager.acknowledgeForTesting()
+        }
+
+        // Filter out exercises that have no completed sets to keep logs clean
+        val filteredExercises = currentSession.exercises.map { exSession ->
+            exSession.copy(sets = exSession.sets.filter { it.isCompleted })
+        }.filter { it.sets.isNotEmpty() }
+
+        if (filteredExercises.isNotEmpty()) {
+            val finishedSession = currentSession.copy(
+                endTime = System.currentTimeMillis(),
+                exercises = filteredExercises
+            )
+            viewModelScope.launch {
+                dataRepository.addWorkoutSession(finishedSession)
+            }
+        }
+        _uiState.update { it.copy(isFinishModalOpen = false) }
+    }
+
+    fun discardSession() {
+        // Stop all timers, don't save anything
+        elapsedTimerJob?.cancel()
+        val context = applicationContext
+        if (context != null) {
+            RestTimerManager.cancelAll(context)
+            RestTimerService.stop(context)
+        } else {
+            RestTimerManager.acknowledgeForTesting()
+        }
+        _uiState.update { it.copy(isFinishModalOpen = false) }
+    }
+
+    // --- Exercise Picker ---
+
+    fun setExercisePickerOpen(isOpen: Boolean) {
+        _uiState.update { it.copy(isExercisePickerOpen = isOpen) }
+    }
+
+    private fun startRestTimer(durationSeconds: Int) {
+        val context = applicationContext
+        if (context != null) {
+            RestTimerManager.startTimer(context, durationSeconds)
+            RestTimerService.start(context)
+        } else {
+            RestTimerManager.startTimerForTesting(durationSeconds)
+        }
+    }
+
+    fun acknowledgeRestTimer() {
+        val context = applicationContext
+        if (context != null) {
+            RestTimerManager.acknowledge(context)
+            RestTimerService.stop(context)
+        } else {
+            RestTimerManager.acknowledgeForTesting()
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        elapsedTimerJob?.cancel()
+        countdownDisplayJob?.cancel()
+        timerObserverJob?.cancel()
+        // Do NOT cancel the timer/alarm/service here — it should persist beyond ViewModel lifecycle
+    }
+
+    // --- Private Helper Functions ---
+
+    private fun updateSessionState(updatedSession: WorkoutSession) {
+        val plannedExercises = updatedSession.exercises.size
+        val plannedSets = updatedSession.exercises.sumOf { it.sets.size }
+        val completedExercises = updatedSession.exercises.count { it.sets.any { set -> set.isCompleted } }
+        val completedSets = updatedSession.exercises.sumOf { it.sets.count { it.isCompleted } }
+
+        _uiState.update {
+            it.copy(
+                activeSession = updatedSession,
+                totalExercises = plannedExercises,
+                totalCompletedSets = completedSets,
+                plannedExercisesCount = plannedExercises,
+                plannedSetsCount = plannedSets,
+                completedExercisesCount = completedExercises,
+                completedSetsCount = completedSets
+            )
+        }
+    }
+
+    private fun getCurrentDateString(): String {
+        val sdf = java.text.SimpleDateFormat("d MMMM", java.util.Locale.FRENCH)
+        return sdf.format(java.util.Date())
+    }
+}
