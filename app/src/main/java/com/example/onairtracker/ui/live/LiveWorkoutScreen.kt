@@ -1,10 +1,6 @@
 package com.example.onairtracker.ui.live
 
-import android.content.Context
 import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -69,8 +65,12 @@ fun LiveWorkoutScreen(
     }
 
     // Start a fresh session when the screen is first displayed
+    // Start a fresh session only if one doesn't already exist
+    // (protects against recomposition or config change re-triggering)
     LaunchedEffect(Unit) {
-        viewModel.startNewSession()
+        if (viewModel.uiState.value.activeSession == null) {
+            viewModel.startNewSession()
+        }
     }
 
     // Dynamic request for POST_NOTIFICATIONS permission on Android 13+
@@ -89,37 +89,9 @@ fun LiveWorkoutScreen(
         }
     }
 
-    // Vibration effect when rest timer reaches zero
-    val vibrator = remember {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            vm.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-        }
-    }
-
-    LaunchedEffect(state.isRestTimerVibrating) {
-        if (state.isRestTimerVibrating) {
-            // Vibrate in a repeating call-like pattern: vibrate 800ms, pause 400ms
-            val pattern = longArrayOf(0, 800, 400, 800, 400)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0)) // 0 = repeat from index 0
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(pattern, 0)
-            }
-            // Auto-stop vibration after 30 seconds to save battery
-            try {
-                kotlinx.coroutines.delay(30_000L)
-            } finally {
-                vibrator.cancel()
-            }
-        } else {
-            vibrator.cancel()
-        }
-    }
+    // Vibration is now handled by RestTimerManager/RestTimerReceiver
+    // (works even when app is in background or killed)
+    // The UI only uses isRestTimerVibrating for visual effects (red state)
 
 
     Scaffold(
@@ -218,20 +190,6 @@ fun LiveWorkoutScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(
-                            onClick = { viewModel.addTimerTime(-30) },
-                            colors = ButtonDefaults.textButtonColors(contentColor = AccentSecondary),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                        ) {
-                            Text("-30s", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        }
-                        TextButton(
-                            onClick = { viewModel.addTimerTime(30) },
-                            colors = ButtonDefaults.textButtonColors(contentColor = AccentSecondary),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                        ) {
-                            Text("+30s", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        }
                         Button(
                             onClick = { viewModel.acknowledgeRestTimer() },
                             colors = ButtonDefaults.buttonColors(

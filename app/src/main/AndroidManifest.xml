@@ -4,9 +4,13 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- USE_EXACT_ALARM: auto-granted, makes canScheduleExactAlarms() true so the backup alarm
+         is EXACT (and wakes the CPU during Doze for long rests with the screen off). Eligible
+         under Play policy for timer/alarm apps. The live foreground service drives the finish
+         precisely while awake; this alarm is the fallback when the process is killed or dozing. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SHORT_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:allowBackup="true"
@@ -31,7 +35,11 @@
         <service
             android:name=".ui.live.RestTimerService"
             android:exported="false"
-            android:foregroundServiceType="shortService" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Workout rest timer countdown for fitness tracking" />
+        </service>
     </application>
 
 </manifest>

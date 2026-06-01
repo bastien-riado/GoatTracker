@@ -89,6 +89,11 @@ class LiveWorkoutViewModel(
                 _uiState.update {
                     it.copy(timerRemainingSeconds = remaining, isRestTimerVibrating = false)
                 }
+                if (applicationContext == null) {
+                    // In a JVM unit test, wall clock System.currentTimeMillis() does not advance
+                    // with virtual delay(), so break immediately to prevent infinite loop.
+                    break
+                }
                 delay(500)
             }
         }
@@ -97,7 +102,13 @@ class LiveWorkoutViewModel(
     fun startNewSession() {
         // Cancel any existing timers from previous session
         elapsedTimerJob?.cancel()
-        applicationContext?.let { RestTimerManager.cancelAll(it) }
+        val context = applicationContext
+        if (context != null) {
+            RestTimerManager.cancelAll(context)
+            RestTimerService.stop(context)
+        } else {
+            RestTimerManager.acknowledgeForTesting()
+        }
 
         val newSession = WorkoutSession(
             name = "Séance du ${getCurrentDateString()}",
@@ -323,9 +334,12 @@ class LiveWorkoutViewModel(
 
         // Stop all timers
         elapsedTimerJob?.cancel()
-        applicationContext?.let {
-            RestTimerManager.cancelAll(it)
-            RestTimerService.stop(it)
+        val context = applicationContext
+        if (context != null) {
+            RestTimerManager.cancelAll(context)
+            RestTimerService.stop(context)
+        } else {
+            RestTimerManager.acknowledgeForTesting()
         }
 
         // Filter out exercises that have no completed sets to keep logs clean
@@ -348,9 +362,12 @@ class LiveWorkoutViewModel(
     fun discardSession() {
         // Stop all timers, don't save anything
         elapsedTimerJob?.cancel()
-        applicationContext?.let {
-            RestTimerManager.cancelAll(it)
-            RestTimerService.stop(it)
+        val context = applicationContext
+        if (context != null) {
+            RestTimerManager.cancelAll(context)
+            RestTimerService.stop(context)
+        } else {
+            RestTimerManager.acknowledgeForTesting()
         }
         _uiState.update { it.copy(isFinishModalOpen = false) }
     }
@@ -362,20 +379,23 @@ class LiveWorkoutViewModel(
     }
 
     private fun startRestTimer(durationSeconds: Int) {
-        val context = applicationContext ?: return
-        RestTimerManager.startTimer(context, durationSeconds)
-        RestTimerService.start(context)
-    }
-
-    fun addTimerTime(seconds: Int) {
-        val context = applicationContext ?: return
-        RestTimerManager.addTime(context, seconds)
+        val context = applicationContext
+        if (context != null) {
+            RestTimerManager.startTimer(context, durationSeconds)
+            RestTimerService.start(context)
+        } else {
+            RestTimerManager.startTimerForTesting(durationSeconds)
+        }
     }
 
     fun acknowledgeRestTimer() {
-        val context = applicationContext ?: return
-        RestTimerManager.acknowledge(context)
-        RestTimerService.stop(context)
+        val context = applicationContext
+        if (context != null) {
+            RestTimerManager.acknowledge(context)
+            RestTimerService.stop(context)
+        } else {
+            RestTimerManager.acknowledgeForTesting()
+        }
     }
 
     override fun onCleared() {

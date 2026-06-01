@@ -43,12 +43,13 @@ class RestTimerService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = buildCountdownNotification(RestTimerManager.getRemainingSeconds())
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceCompat.startForeground(
                 this,
                 FOREGROUND_NOTIFICATION_ID,
                 notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SHORT_SERVICE
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
             )
         } else {
             startForeground(FOREGROUND_NOTIFICATION_ID, notification)
@@ -56,25 +57,28 @@ class RestTimerService : Service() {
 
         countdownJob?.cancel()
         countdownJob = serviceScope.launch {
+            // collectLatest: a new Counting (e.g. the next set restarts the rest) cancels the
+            // pending finish below and re-arms it on the new target.
             RestTimerManager.state.collectLatest { timerState ->
                 when (timerState) {
                     is RestTimerState.Counting -> {
-                        // Update notification periodically
-                        while (isActive) {
-                            val remaining = RestTimerManager.getRemainingSeconds()
-                            if (remaining <= 0) break
-                            val updatedNotification = buildCountdownNotification(remaining)
-                            val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-                            nm.notify(FOREGROUND_NOTIFICATION_ID, updatedNotification)
-                            delay(1000)
-                        }
+                        // Publish the notification once; the live countdown is rendered natively
+                        // by the system via setUsesChronometer/ChronometerCountDown (audit B5).
+                        val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+                        nm.notify(
+                            FOREGROUND_NOTIFICATION_ID,
+                            buildCountdownNotification(RestTimerManager.getRemainingSeconds())
+                        )
+                        // Drive the finish PRECISELY from the live process. A coroutine delay is
+                        // accurate to the millisecond and, because this is a foreground service,
+                        // keeps firing even with the screen off — unlike the AlarmManager backup,
+                        // which the system batches/delays by ~10s when exact alarms aren't granted.
+                        val delayMs = timerState.targetMillis - System.currentTimeMillis()
+                        if (delayMs > 0) delay(delayMs)
+                        RestTimerManager.reachZero(this@RestTimerService)
                     }
-                    is RestTimerState.Finished -> {
-                        stopSelf()
-                    }
-                    is RestTimerState.Idle -> {
-                        stopSelf()
-                    }
+                    is RestTimerState.Finished -> stopSelf()
+                    is RestTimerState.Idle -> stopSelf()
                 }
             }
         }
@@ -91,10 +95,15 @@ class RestTimerService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun buildCountdownNotification(remainingSeconds: Int): Notification {
-        val minutes = remainingSeconds / 60
-        val seconds = remainingSeconds % 60
-        val timeText = String.format("%02d:%02d", minutes, seconds)
+        // Get the absolute target time for the native countdown chronometer
+        val timerState = RestTimerManager.state.value
+        val targetMillis = if (timerState is RestTimerState.Counting) {
+            timerState.targetMillis
+        } else {
+            System.currentTimeMillis() + remainingSeconds * 1000L
+        }
 
+        // Tap → open the app on the live workout screen
         val activityIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra(RestTimerManager.EXTRA_NAVIGATE_TO, RestTimerManager.NAV_LIVE_WORKOUT)
@@ -104,6 +113,7 @@ class RestTimerService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // "Passer" action → cancel timer via Receiver
         val cancelIntent = Intent(this, RestTimerReceiver::class.java).apply {
             action = RestTimerManager.ACTION_CANCEL
         }
@@ -112,10 +122,17 @@ class RestTimerService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, RestTimerManager.CHANNEL_ID)
+        return NotificationCompat.Builder(this, RestTimerManager.COUNTDOWN_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("Repos en cours")
-            .setContentText("Temps restant : $timeText")
+            .setContentText("Temps restant avant la prochaine série")
+            // Native countdown timer — updates in real-time on lock screen
+            .setWhen(targetMillis)
+            .setUsesChronometer(true)
+            .setChronometerCountDown(true)
+            .setShowWhen(true)
+            // Visible on lock screen without unlocking
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setContentIntent(pendingIntent)

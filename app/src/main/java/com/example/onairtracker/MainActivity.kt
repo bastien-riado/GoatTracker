@@ -11,6 +11,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.example.onairtracker.theme.OnAirTrackerTheme
 import com.example.onairtracker.ui.live.RestTimerManager
+import com.example.onairtracker.ui.live.RestTimerService
+import com.example.onairtracker.ui.live.RestTimerState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,11 +29,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Restore timer state from SharedPreferences (survives process death)
+        RestTimerManager.initialize(this)
+
+        // If a timer was counting when the app was killed, restart the foreground service
+        if (RestTimerManager.state.value is RestTimerState.Counting) {
+            RestTimerService.start(this)
+        }
+
         // Handle navigation from notification when app is cold-started
         handleNavigationIntent(intent)
-
-        // Create notification channel early so it's always available
-        RestTimerManager.ensureNotificationChannel(this)
 
         enableEdgeToEdge()
         setContent {
@@ -44,6 +51,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        RestTimerManager.isAppInForeground = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        RestTimerManager.isAppInForeground = false
     }
 
     override fun onNewIntent(intent: Intent) {
