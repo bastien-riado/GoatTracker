@@ -9,8 +9,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.example.goattracker.ui.live.RestTimerManager
 import com.example.goattracker.ui.main.MainScreen
@@ -44,6 +46,16 @@ fun MainNavigation() {
   NavDisplay(
     backStack = backStack,
     onBack = { backStack.removeLastOrNull() },
+    // Scope ViewModels to each nav entry (not the Activity). Without the ViewModelStore decorator
+    // every viewModel{} resolves to the Activity store, so e.g. LiveWorkoutViewModel survived a
+    // pop and was reused for the next session — leaving a stale session and a frozen timer until
+    // the process was restarted. With per-entry scoping the VM is cleared on pop and recreated fresh.
+    // (The scene-setup decorator is applied internally by NavDisplay; we only add the public
+    // saved-state + view-model decorators here.)
+    entryDecorators = listOf(
+        rememberSaveableStateHolderNavEntryDecorator(),
+        rememberViewModelStoreNavEntryDecorator(),
+    ),
     entryProvider =
       entryProvider {
         entry<Main> {
@@ -55,7 +67,11 @@ fun MainNavigation() {
         entry<LiveWorkout> { key ->
           LiveWorkoutScreen(
               sessionId = key.sessionId,
-              onSessionExit = { backStack.removeLastOrNull() }
+              onSessionExit = { backStack.removeLastOrNull() },
+              // Push the full create screen on top of the live session. The LiveWorkout entry stays
+              // in the backstack, so the session (and its ViewModel) is preserved; on save the user
+              // returns to the intact session and the new exercise is auto-added (see ViewModel).
+              onCreateExercise = { backStack.add(CreateExercise()) }
           )
         }
         entry<Profile> {

@@ -43,10 +43,29 @@ class LiveWorkoutViewModel(
 
     private var allSessions: List<WorkoutSession> = emptyList()
 
+    // Exercise ids seen so far, used to detect an exercise that was just created.
+    private var knownExerciseIds: Set<String>? = null
+    // Set when the user leaves to create an exercise from inside the session: the next newly
+    // created exercise is auto-added to the active session on return.
+    private var pendingAutoAdd: Boolean = false
+
     init {
         viewModelScope.launch {
             dataRepository.workoutState.collect { state ->
                 allSessions = state.sessions
+
+                // Auto-add an exercise created via the in-session "Créer" flow. On the first
+                // emission we only seed the known set so pre-existing exercises are never added.
+                val previousIds = knownExerciseIds
+                if (previousIds != null && pendingAutoAdd) {
+                    val createdExercise = state.exercises.firstOrNull { it.id !in previousIds }
+                    if (createdExercise != null) {
+                        pendingAutoAdd = false
+                        addExerciseToSession(createdExercise)
+                    }
+                }
+                knownExerciseIds = state.exercises.mapTo(HashSet()) { it.id }
+
                 _uiState.update { it.copy(availableExercises = state.exercises) }
             }
         }
@@ -356,7 +375,9 @@ class LiveWorkoutViewModel(
                 dataRepository.addWorkoutSession(finishedSession)
             }
         }
-        _uiState.update { it.copy(isFinishModalOpen = false) }
+        // Reset to a clean slate so re-entering the screen starts a brand-new session. Primary fix
+        // is per-entry VM scoping (Navigation.kt); this is defense-in-depth if the VM is ever reused.
+        _uiState.update { LiveWorkoutUiState(availableExercises = it.availableExercises) }
     }
 
     fun discardSession() {
@@ -369,13 +390,23 @@ class LiveWorkoutViewModel(
         } else {
             RestTimerManager.acknowledgeForTesting()
         }
-        _uiState.update { it.copy(isFinishModalOpen = false) }
+        // Reset to a clean slate so re-entering the screen starts a brand-new session.
+        _uiState.update { LiveWorkoutUiState(availableExercises = it.availableExercises) }
     }
 
     // --- Exercise Picker ---
 
     fun setExercisePickerOpen(isOpen: Boolean) {
         _uiState.update { it.copy(isExercisePickerOpen = isOpen) }
+    }
+
+    /**
+     * Called right before navigating to the create-exercise screen from inside the session, so the
+     * next exercise created is auto-added to the active session when we return (see the
+     * workoutState collector in init).
+     */
+    fun prepareAutoAddOnReturn() {
+        pendingAutoAdd = true
     }
 
     private fun startRestTimer(durationSeconds: Int) {

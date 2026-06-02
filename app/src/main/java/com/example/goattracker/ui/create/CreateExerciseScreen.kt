@@ -25,6 +25,7 @@ import com.example.goattracker.data.DefaultDataRepository
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.TrackingType
 import com.example.goattracker.theme.*
+import com.example.goattracker.ui.components.AppTextField
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -140,22 +141,11 @@ fun CreateExerciseScreen(
             // 1. Name Input
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 FormLabel(text = "Nom de l'exercice")
-                OutlinedTextField(
+                AppTextField(
                     value = state.name,
                     onValueChange = { viewModel.updateName(it) },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("ex: Développé Incliné Haltères", color = Meta) },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Surface,
-                        unfocusedContainerColor = Surface,
-                        focusedBorderColor = Accent,
-                        unfocusedBorderColor = BorderSoft,
-                        focusedTextColor = Fg,
-                        unfocusedTextColor = Fg,
-                        cursorColor = Accent
-                    ),
-                    shape = RoundedCornerShape(8.dp),
-                    singleLine = true
+                    placeholder = "ex: Développé Incliné Haltères"
                 )
             }
 
@@ -190,23 +180,15 @@ fun CreateExerciseScreen(
                     expanded = expanded,
                     onExpandedChange = { expanded = !expanded }
                 ) {
-                    OutlinedTextField(
-                        readOnly = true,
-                        value = state.primaryMuscle.ifEmpty { "Sélectionner un groupe" },
+                    AppTextField(
+                        value = state.primaryMuscle,
                         onValueChange = {},
+                        readOnly = true,
                         modifier = Modifier
                             .fillMaxWidth()
                             .menuAnchor(),
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Surface,
-                            unfocusedContainerColor = Surface,
-                            focusedBorderColor = Accent,
-                            unfocusedBorderColor = BorderSoft,
-                            focusedTextColor = if (state.primaryMuscle.isEmpty()) Meta else Fg,
-                            unfocusedTextColor = if (state.primaryMuscle.isEmpty()) Meta else Fg
-                        ),
-                        shape = RoundedCornerShape(8.dp)
+                        placeholder = "Sélectionner un groupe",
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }
                     )
 
                     ExposedDropdownMenu(

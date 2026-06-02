@@ -6,8 +6,6 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,7 +13,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -29,15 +26,18 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.goattracker.data.DefaultDataRepository
 import com.example.goattracker.domain.model.*
 import com.example.goattracker.theme.*
+import com.example.goattracker.ui.components.AppNumberField
+import com.example.goattracker.ui.components.AppTextField
 import com.example.goattracker.ui.main.CategoryChip
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,6 +45,7 @@ import com.example.goattracker.ui.main.CategoryChip
 fun LiveWorkoutScreen(
     sessionId: String?,
     onSessionExit: () -> Unit,
+    onCreateExercise: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -471,18 +472,28 @@ fun LiveWorkoutScreen(
 
     // ========== EXERCISE PICKER DIALOG (unchanged) ==========
     if (state.isExercisePickerOpen) {
-        Dialog(onDismissRequest = { viewModel.setExercisePickerOpen(false) }) {
+        Dialog(
+            onDismissRequest = { viewModel.setExercisePickerOpen(false) },
+            // decorFitsSystemWindows = false lets imePadding() react to the keyboard inside the
+            // dialog window so the list/search rise above it; usePlatformDefaultWidth = false lets
+            // us control the width ourselves.
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = Surface),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxWidth(0.92f)
                     .fillMaxHeight(0.85f)
                     .border(1.dp, Border, RoundedCornerShape(16.dp))
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .imePadding()
                         .padding(16.dp)
                 ) {
                     Row(
@@ -505,22 +516,14 @@ fun LiveWorkoutScreen(
                     var pickerSearchQuery by remember { mutableStateOf("") }
                     var pickerCategoryFilter by remember { mutableStateOf<ExerciseCategory?>(null) }
 
-                    OutlinedTextField(
+                    AppTextField(
                         value = pickerSearchQuery,
                         onValueChange = { pickerSearchQuery = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Rechercher un exercice...", color = Meta) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = SurfaceElevated,
-                            unfocusedContainerColor = SurfaceElevated,
-                            focusedBorderColor = Accent,
-                            unfocusedBorderColor = BorderSoft,
-                            focusedTextColor = Fg,
-                            unfocusedTextColor = Fg
-                        ),
+                        placeholder = "Rechercher un exercice...",
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Muted) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(8.dp)
+                        capitalization = KeyboardCapitalization.None,
+                        containerColor = SurfaceElevated
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -592,6 +595,29 @@ fun LiveWorkoutScreen(
                                 }
                             }
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Create a brand-new exercise without leaving the session: navigates to the full
+                    // create screen; on save we return here and the new exercise is auto-added.
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.prepareAutoAddOnReturn()
+                            viewModel.setExercisePickerOpen(false)
+                            onCreateExercise()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
+                            brush = Brush.linearGradient(listOf(Accent, Accent))
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = Accent)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Créer un nouvel exercice", color = Accent, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -888,7 +914,7 @@ fun SetRowItem(
             when (trackingType) {
                 TrackingType.WEIGHT_REPS -> {
                     var weightText by remember(set.weight) { mutableStateOf(if (set.weight > 0) set.weight.toInt().toString() else "") }
-                    CompactTextField(
+                    AppNumberField(
                         value = weightText,
                         onValueChange = {
                             weightText = it
@@ -914,7 +940,7 @@ fun SetRowItem(
                 }
                 TrackingType.TIME -> {
                     var minutesText by remember { mutableStateOf((set.durationSeconds / 60).toString()) }
-                    CompactTextField(
+                    AppNumberField(
                         value = minutesText,
                         onValueChange = {
                             minutesText = it
@@ -923,7 +949,7 @@ fun SetRowItem(
                 }
                 TrackingType.DISTANCE -> {
                     var distText by remember(set.distanceKm) { mutableStateOf(set.distanceKm.toString()) }
-                    CompactTextField(
+                    AppNumberField(
                         value = distText,
                         onValueChange = {
                             distText = it
@@ -941,7 +967,7 @@ fun SetRowItem(
             contentAlignment = Alignment.Center
         ) {
             var repsText by remember(set.reps) { mutableStateOf(if (set.reps > 0) set.reps.toString() else "") }
-            CompactTextField(
+            AppNumberField(
                 value = repsText,
                 onValueChange = {
                     repsText = it
@@ -1000,43 +1026,4 @@ fun SetRowItem(
             }
         }
     }
-}
-
-@Composable
-fun CompactTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    keyboardType: KeyboardType = KeyboardType.Number,
-    modifier: Modifier = Modifier
-) {
-    var isFocused by remember { mutableStateOf(false) }
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        textStyle = MaterialTheme.typography.bodyMedium.copy(
-            textAlign = TextAlign.Center,
-            fontWeight = FontWeight.Bold,
-            color = Fg
-        ),
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        modifier = modifier
-            .fillMaxWidth()
-            .height(42.dp)
-            .onFocusChanged { isFocused = it.isFocused }
-            .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) Accent else BorderSoft,
-                shape = RoundedCornerShape(8.dp)
-            )
-            .background(Surface, RoundedCornerShape(8.dp)),
-        decorationBox = { innerTextField ->
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp)
-            ) {
-                innerTextField()
-            }
-        }
-    )
 }

@@ -11,7 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -43,6 +42,7 @@ import com.example.goattracker.data.DefaultDataRepository
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.TrackingType
+import com.example.goattracker.ui.components.AppTextField
 import com.example.goattracker.domain.model.WorkoutSession
 import com.example.goattracker.theme.*
 import java.text.SimpleDateFormat
@@ -412,28 +412,21 @@ fun ExerciseDetailContentOverlay(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SectionLabel(text = "Notes & Posture")
-                    OutlinedTextField(
+                    AppTextField(
                         value = notesText,
-                        onValueChange = { 
+                        onValueChange = {
                             notesText = it
                             onNotesChange(it)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 90.dp),
-                        placeholder = { Text("Position des mains, repères de sécurité, sensations...", color = Meta) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = SurfaceElevated,
-                            unfocusedContainerColor = SurfaceElevated,
-                            focusedBorderColor = Accent,
-                            unfocusedBorderColor = BorderSoft,
-                            focusedTextColor = Fg,
-                            unfocusedTextColor = Fg,
-                            cursorColor = Accent
-                        ),
+                        placeholder = "Position des mains, repères de sécurité, sensations...",
+                        singleLine = false,
+                        imeAction = ImeAction.Done,
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                         shape = RoundedCornerShape(12.dp),
-                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
+                        containerColor = SurfaceElevated
                     )
                 }
             }

@@ -185,6 +185,78 @@ class LiveWorkoutViewModelTest {
     }
 
     @Test
+    fun viewModel_confirmSaveSession_resetsStateForNextSession() = runTest {
+        val (viewModel, _) = createTestViewModel(testScheduler)
+
+        viewModel.addExerciseToSession(testExercise)
+        val firstSet = viewModel.uiState.value.activeSession!!.exercises.first().sets.first()
+        viewModel.toggleSetCompletion("ex-1", firstSet.id)
+
+        viewModel.confirmSaveSession()
+
+        // Regression guard for the "frozen timer on the second session" bug: leaving a session must
+        // clear it so re-entering the screen starts a brand-new session from zero.
+        val state = viewModel.uiState.value
+        assertNull(state.activeSession)
+        assertEquals(0, state.elapsedSeconds)
+        assertNull(state.timerRemainingSeconds)
+    }
+
+    @Test
+    fun viewModel_discardSession_resetsStateForNextSession() = runTest {
+        val (viewModel, _) = createTestViewModel(testScheduler)
+
+        viewModel.addExerciseToSession(testExercise)
+
+        viewModel.discardSession()
+
+        val state = viewModel.uiState.value
+        assertNull(state.activeSession)
+        assertEquals(0, state.elapsedSeconds)
+    }
+
+    @Test
+    fun viewModel_prepareAutoAddOnReturn_autoAddsNewlyCreatedExercise() = runTest {
+        val (viewModel, repository) = createTestViewModel(testScheduler)
+
+        // User taps "Créer un nouvel exercice" from the in-session picker, then the create screen
+        // saves a brand-new exercise.
+        viewModel.prepareAutoAddOnReturn()
+        val created = Exercise(
+            id = "created-1",
+            name = "Rowing Barre",
+            category = ExerciseCategory.PULL,
+            primaryMuscle = "Dos",
+            trackingType = TrackingType.WEIGHT_REPS
+        )
+        repository.addExercise(created)
+
+        // On return it must already be in the active session.
+        val session = viewModel.uiState.value.activeSession
+        assertNotNull(session)
+        assertTrue(session!!.exercises.any { it.exercise.id == "created-1" })
+    }
+
+    @Test
+    fun viewModel_withoutPrepareAutoAdd_doesNotAutoAddCreatedExercise() = runTest {
+        val (viewModel, repository) = createTestViewModel(testScheduler)
+
+        // An exercise created outside the in-session flow must NOT be auto-added.
+        val created = Exercise(
+            id = "created-2",
+            name = "Curl Haltères",
+            category = ExerciseCategory.PULL,
+            primaryMuscle = "Biceps",
+            trackingType = TrackingType.WEIGHT_REPS
+        )
+        repository.addExercise(created)
+
+        val session = viewModel.uiState.value.activeSession
+        assertNotNull(session)
+        assertTrue(session!!.exercises.isEmpty())
+    }
+
+    @Test
     fun viewModel_acknowledgeRestTimer_clearsState() = runTest {
         val (viewModel, _) = createTestViewModel(testScheduler)
 

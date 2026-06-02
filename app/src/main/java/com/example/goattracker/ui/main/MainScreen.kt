@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,6 +44,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import com.example.goattracker.data.DefaultDataRepository
 import com.example.goattracker.domain.model.Exercise
+import com.example.goattracker.ui.components.AppTextField
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.TrackingType
 import com.example.goattracker.theme.*
@@ -104,13 +106,13 @@ fun MainScreen(
             }
 
             // 2. Search bar with Neon accent border focus
-            OutlinedTextField(
+            AppTextField(
                 value = searchQuery,
                 onValueChange = { viewModel.updateSearchQuery(it) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                placeholder = { Text("Rechercher un exercice...", color = Meta) },
+                placeholder = "Rechercher un exercice...",
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
@@ -118,17 +120,7 @@ fun MainScreen(
                         tint = Muted
                     )
                 },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Surface,
-                    unfocusedContainerColor = Surface,
-                    focusedBorderColor = Accent,
-                    unfocusedBorderColor = BorderSoft,
-                    focusedTextColor = Fg,
-                    unfocusedTextColor = Fg,
-                    cursorColor = Accent
-                ),
-                shape = RoundedCornerShape(8.dp),
-                singleLine = true
+                capitalization = KeyboardCapitalization.None
             )
 
             Spacer(modifier = Modifier.height(16.dp))
