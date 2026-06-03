@@ -131,8 +131,18 @@ fun WorkoutSession.toDto(): WorkoutSessionDto {
     )
 }
 
+/**
+ * Bumped whenever the persisted schema changes in a way that needs a migration. [toDto] writes it
+ * into every file; files written before versioning existed deserialize as 0, so a future migration
+ * can tell them apart. The field default is 0 (not this constant) on purpose: kotlinx.serialization
+ * omits values equal to the default, so defaulting to 0 while writing this constant guarantees the
+ * version is actually serialised.
+ */
+const val CURRENT_SCHEMA_VERSION = 1
+
 @Serializable
 data class WorkoutStateDto(
+    val schemaVersion: Int = 0,
     val exercises: List<ExerciseDto>,
     val sessions: List<WorkoutSessionDto>,
     // Defaulted so existing on-disk files (written before this field existed) still deserialize.
@@ -149,6 +159,7 @@ data class WorkoutStateDto(
 
 fun WorkoutState.toDto(): WorkoutStateDto {
     return WorkoutStateDto(
+        schemaVersion = CURRENT_SCHEMA_VERSION,
         exercises = exercises.map { it.toDto() },
         sessions = sessions.map { it.toDto() },
         activeDraft = activeDraft?.toDto()

@@ -12,8 +12,10 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DataRepositoryTest {
@@ -121,6 +123,41 @@ class DataRepositoryTest {
         repository.deleteWorkoutSession(session.id)
         currentState = repository.workoutState.first()
         assertTrue(currentState.sessions.isEmpty())
+    }
+
+    @Test
+    fun repository_corruptFile_isBackedUpAndFallsBackToDefaults() = runTest {
+        val testDispatcher = UnconfinedTestDispatcher(testScheduler)
+        val dir = File(System.getProperty("java.io.tmpdir"), "gt-corrupt-" + System.nanoTime()).apply { mkdirs() }
+        File(dir, "workouts.json").writeText("{ not valid json ]]")
+
+        val repository = DefaultDataRepository(storageDir = dir, dispatcher = testDispatcher, scope = TestScope(testDispatcher))
+        repository.isReady.first { it }
+
+        // Fell back to the default preset instead of crashing...
+        val state = repository.workoutState.first()
+        assertEquals(3, state.exercises.size)
+        // ...and the unreadable file was preserved rather than silently wiped.
+        val backups = dir.listFiles { f -> f.name.startsWith("workouts.corrupt-") } ?: emptyArray()
+        assertTrue("expected a corrupt-file backup to be created", backups.isNotEmpty())
+    }
+
+    @Test
+    fun repository_legacyFileWithoutSchemaVersionOrDraft_stillLoads() = runTest {
+        val testDispatcher = UnconfinedTestDispatcher(testScheduler)
+        val dir = File(System.getProperty("java.io.tmpdir"), "gt-legacy-" + System.nanoTime()).apply { mkdirs() }
+        // Pre-versioning, pre-draft format: must still deserialize via the defaulted fields.
+        File(dir, "workouts.json").writeText(
+            """{"exercises":[{"id":"x1","name":"Legacy","category":"PUSH","primaryMuscle":"Pecs","trackingType":"WEIGHT_REPS"}],"sessions":[]}"""
+        )
+
+        val repository = DefaultDataRepository(storageDir = dir, dispatcher = testDispatcher, scope = TestScope(testDispatcher))
+        repository.isReady.first { it }
+
+        val state = repository.workoutState.first()
+        assertEquals(1, state.exercises.size)
+        assertEquals("Legacy", state.exercises[0].name)
+        assertNull(state.activeDraft)
     }
 }
 
