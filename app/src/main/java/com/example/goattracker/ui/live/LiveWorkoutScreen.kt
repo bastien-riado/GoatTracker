@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,7 +59,7 @@ fun LiveWorkoutScreen(
         )
     }
 
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     // Block system back button — only way out is via "Terminer"
     BackHandler(enabled = true) {
@@ -253,8 +254,8 @@ fun LiveWorkoutScreen(
                             isFullyCompleted = isFullyCompleted,
                             onAddSet = { viewModel.addSetToExercise(exerciseSession.exercise.id) },
                             onDeleteSet = { setId -> viewModel.deleteSetFromExercise(exerciseSession.exercise.id, setId) },
-                            onUpdateSetValues = { setId, weight, reps ->
-                                viewModel.updateSetValues(exerciseSession.exercise.id, setId, weight, reps)
+                            onUpdateSetValues = { setId, weight, reps, durationSeconds, distanceKm ->
+                                viewModel.updateSetValues(exerciseSession.exercise.id, setId, weight, reps, durationSeconds, distanceKm)
                             },
                             onToggleSet = { setId ->
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -709,7 +710,7 @@ fun ExerciseSessionCard(
     isFullyCompleted: Boolean,
     onAddSet: () -> Unit,
     onDeleteSet: (String) -> Unit,
-    onUpdateSetValues: (String, Double?, Int?) -> Unit,
+    onUpdateSetValues: (String, Double?, Int?, Int?, Double?) -> Unit,
     onToggleSet: (String) -> Unit,
     onRemoveExercise: () -> Unit
 ) {
@@ -837,7 +838,9 @@ fun ExerciseSessionCard(
                             set = set,
                             trackingType = session.exercise.trackingType,
                             onDelete = { onDeleteSet(set.id) },
-                            onUpdateValues = { weight, reps -> onUpdateSetValues(set.id, weight, reps) },
+                            onUpdateValues = { weight, reps, durationSeconds, distanceKm ->
+                                onUpdateSetValues(set.id, weight, reps, durationSeconds, distanceKm)
+                            },
                             onToggle = { onToggleSet(set.id) }
                         )
                     }
@@ -874,7 +877,7 @@ fun SetRowItem(
     set: WorkoutSet,
     trackingType: TrackingType,
     onDelete: () -> Unit,
-    onUpdateValues: (Double?, Int?) -> Unit,
+    onUpdateValues: (Double?, Int?, Int?, Double?) -> Unit,
     onToggle: () -> Unit
 ) {
     val completedBg = if (set.isCompleted) Success.copy(alpha = 0.08f) else Color.Transparent
@@ -920,7 +923,7 @@ fun SetRowItem(
                             weightText = it
                             val parsed = it.toDoubleOrNull()
                             if (parsed != null) {
-                                onUpdateValues(parsed, null)
+                                onUpdateValues(parsed, null, null, null)
                             }
                         }
                     )
@@ -939,44 +942,56 @@ fun SetRowItem(
                     }
                 }
                 TrackingType.TIME -> {
-                    var minutesText by remember { mutableStateOf((set.durationSeconds / 60).toString()) }
+                    // Seconds (not minutes): lossless and lets sub-minute durations (e.g. a 45s plank)
+                    // be entered. Wired to the ViewModel so the value is actually persisted (audit P0-2).
+                    var secondsText by remember(set.durationSeconds) {
+                        mutableStateOf(if (set.durationSeconds > 0) set.durationSeconds.toString() else "")
+                    }
                     AppNumberField(
-                        value = minutesText,
+                        value = secondsText,
                         onValueChange = {
-                            minutesText = it
+                            secondsText = it
+                            it.toIntOrNull()?.let { secs -> onUpdateValues(null, null, secs, null) }
                         }
                     )
                 }
                 TrackingType.DISTANCE -> {
-                    var distText by remember(set.distanceKm) { mutableStateOf(set.distanceKm.toString()) }
+                    // Wired to the ViewModel so the distance is actually persisted (audit P0-2).
+                    var distText by remember(set.distanceKm) {
+                        mutableStateOf(if (set.distanceKm > 0.0) set.distanceKm.toString() else "")
+                    }
                     AppNumberField(
                         value = distText,
                         onValueChange = {
                             distText = it
+                            it.toDoubleOrNull()?.let { km -> onUpdateValues(null, null, null, km) }
                         }
                     )
                 }
             }
         }
 
-        // Reps Input Field
+        // Reps Input Field — only meaningful for rep-based tracking. For TIME/DISTANCE we keep the
+        // column (empty) so the row stays aligned with the header, but show no misleading reps input.
         Box(
             modifier = Modifier
                 .weight(0.20f)
                 .padding(horizontal = 4.dp),
             contentAlignment = Alignment.Center
         ) {
-            var repsText by remember(set.reps) { mutableStateOf(if (set.reps > 0) set.reps.toString() else "") }
-            AppNumberField(
-                value = repsText,
-                onValueChange = {
-                    repsText = it
-                    val parsed = it.toIntOrNull()
-                    if (parsed != null) {
-                        onUpdateValues(null, parsed)
+            if (trackingType == TrackingType.WEIGHT_REPS || trackingType == TrackingType.BODYWEIGHT_REPS) {
+                var repsText by remember(set.reps) { mutableStateOf(if (set.reps > 0) set.reps.toString() else "") }
+                AppNumberField(
+                    value = repsText,
+                    onValueChange = {
+                        repsText = it
+                        val parsed = it.toIntOrNull()
+                        if (parsed != null) {
+                            onUpdateValues(null, parsed, null, null)
+                        }
                     }
-                }
-            )
+                )
+            }
         }
 
         // Validation Check Box Button
