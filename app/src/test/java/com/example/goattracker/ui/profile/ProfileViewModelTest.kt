@@ -44,9 +44,10 @@ class ProfileViewModelTest {
         val state = viewModel.uiState.value
         assertEquals(0, state.totalWorkouts)
         assertEquals(0.0, state.cumulativeVolume, 0.0)
-        // Since DefaultDataRepository loads default presets even with null storageDir
-        assertEquals("Développé Couché", state.selectedExercise?.name)
-        assertEquals(3, state.availableExercises.size)
+        // ProfileViewModel only surfaces exercises that have session history (the 1RM selector is
+        // meaningless for an exercise never performed). With no sessions there are none yet.
+        assertNull(state.selectedExercise)
+        assertEquals(0, state.availableExercises.size)
         assertTrue(state.oneRepMaxEvolution.isEmpty())
         assertTrue(state.muscleGroupSets.isEmpty())
         assertTrue(state.sessionVolumes.isEmpty())

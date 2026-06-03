@@ -138,16 +138,6 @@ object RestTimerManager {
         scheduleAlarm(context, targetMillis)
     }
 
-    fun startTimerForTesting(durationSeconds: Int) {
-        val targetMillis = System.currentTimeMillis() + durationSeconds * 1000L
-        _state.update { RestTimerState.Counting(targetMillis, durationSeconds) }
-    }
-
-    fun acknowledgeForTesting() {
-        _state.update { RestTimerState.Idle }
-    }
-
-
     /**
      * Drives the Counting → Finished transition (red UI, vibration, alert notification).
      * Idempotent and safe to call from BOTH the in-process service timer and the AlarmManager
