@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,8 +42,8 @@ fun SessionsListScreen(
         SessionsListViewModel(DefaultDataRepository.getInstance(context.filesDir))
     }
 
-    val sessions by viewModel.sessions.collectAsState()
-    val sortOrder by viewModel.sortOrder.collectAsState()
+    val sessions by viewModel.sessions.collectAsStateWithLifecycle()
+    val sortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
 
     var sessionToDelete by remember { mutableStateOf<WorkoutSession?>(null) }
     val dateFormat = remember { SimpleDateFormat("EEE d MMM yyyy 'à' HH:mm", Locale.FRENCH) }
