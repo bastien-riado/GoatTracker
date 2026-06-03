@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -30,7 +30,7 @@ fun MainNavigation() {
   val context = LocalContext.current
   val activity = context as? MainActivity
   val pendingNav by (activity?.pendingNavigation
-      ?: kotlinx.coroutines.flow.MutableStateFlow<String?>(null)).collectAsState()
+      ?: kotlinx.coroutines.flow.MutableStateFlow<String?>(null)).collectAsStateWithLifecycle()
 
   LaunchedEffect(pendingNav) {
       if (pendingNav == RestTimerManager.NAV_LIVE_WORKOUT) {
