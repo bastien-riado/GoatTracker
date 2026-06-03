@@ -118,6 +118,24 @@ class LiveWorkoutViewModel(
         }
     }
 
+    /**
+     * Entry point from the screen. Resumes a persisted in-progress session if one exists (e.g. the
+     * process was killed mid-workout), otherwise starts a fresh one. The in-memory guard keeps a
+     * recomposition / config change from clobbering a session that's already loaded.
+     */
+    fun startOrResumeSession() {
+        if (_uiState.value.activeSession != null) return
+        viewModelScope.launch {
+            val draft = dataRepository.getLatestState().activeDraft
+            if (draft != null) {
+                updateSessionState(draft) // restore activeSession + counters from the persisted draft
+                startElapsedTimer()
+            } else {
+                startNewSession()
+            }
+        }
+    }
+
     fun startNewSession() {
         // Cancel any existing timers from a previous session
         elapsedTimerJob?.cancel()
@@ -133,6 +151,7 @@ class LiveWorkoutViewModel(
                 availableExercises = it.availableExercises
             )
         }
+        persistDraft(newSession)
         startElapsedTimer()
     }
 
@@ -368,6 +387,8 @@ class LiveWorkoutViewModel(
                 dataRepository.addWorkoutSession(finishedSession)
             }
         }
+        // The session is over — clear the persisted draft so it isn't resumed next time.
+        persistDraft(null)
         // Reset to a clean slate so re-entering the screen starts a brand-new session. Primary fix
         // is per-entry VM scoping (Navigation.kt); this is defense-in-depth if the VM is ever reused.
         _uiState.update { LiveWorkoutUiState(availableExercises = it.availableExercises) }
@@ -377,6 +398,8 @@ class LiveWorkoutViewModel(
         // Stop all timers, don't save anything
         elapsedTimerJob?.cancel()
         restTimer.cancelAll()
+        // Discarding must NOT leave a resumable draft behind.
+        persistDraft(null)
         // Reset to a clean slate so re-entering the screen starts a brand-new session.
         _uiState.update { LiveWorkoutUiState(availableExercises = it.availableExercises) }
     }
@@ -431,6 +454,16 @@ class LiveWorkoutViewModel(
                 completedSetsCount = completedSets
             )
         }
+        persistDraft(updatedSession)
+    }
+
+    /**
+     * Persist the in-progress session (or clear it with null) so it survives process death.
+     * Fire-and-forget on viewModelScope; the data layer serialises. NOTE: today this rewrites the
+     * whole store on every set edit — lot 6 (debounced writes) will smooth that out.
+     */
+    private fun persistDraft(session: WorkoutSession?) {
+        viewModelScope.launch { dataRepository.saveActiveDraft(session) }
     }
 
     private fun getCurrentDateString(): String {

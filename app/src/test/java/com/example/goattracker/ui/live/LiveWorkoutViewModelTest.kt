@@ -316,6 +316,40 @@ class LiveWorkoutViewModelTest {
         assertEquals(1, viewModel.uiState.value.totalExercises)
         assertEquals(1, viewModel.uiState.value.totalCompletedSets)
     }
+
+    @Test
+    fun activeSession_persistsAsDraft_andResumesAfterProcessDeath() = runTest {
+        val testDispatcher = UnconfinedTestDispatcher(testScheduler)
+        val testScope = TestScope(testDispatcher)
+        val repository = DefaultDataRepository(storageDir = null, dispatcher = testDispatcher, scope = testScope)
+
+        // First VM: start a session and log an exercise.
+        val vm1 = LiveWorkoutViewModel(
+            dataRepository = repository,
+            restTimer = FakeRestTimer(),
+            elapsedTicker = flowOf(Unit),
+            countdownTicker = flowOf(Unit),
+        )
+        vm1.startOrResumeSession()
+        vm1.addExerciseToSession(testExercise)
+        assertNotNull(repository.getLatestState().activeDraft)
+        assertEquals(1, repository.getLatestState().activeDraft!!.exercises.size)
+
+        // Simulate process death: a fresh VM on the same repository resumes the draft.
+        val vm2 = LiveWorkoutViewModel(
+            dataRepository = repository,
+            restTimer = FakeRestTimer(),
+            elapsedTicker = flowOf(Unit),
+            countdownTicker = flowOf(Unit),
+        )
+        vm2.startOrResumeSession()
+        assertNotNull(vm2.uiState.value.activeSession)
+        assertEquals(1, vm2.uiState.value.activeSession!!.exercises.size)
+
+        // Discarding clears the draft so it is not resumed again.
+        vm2.discardSession()
+        assertNull(repository.getLatestState().activeDraft)
+    }
 }
 
 /**
