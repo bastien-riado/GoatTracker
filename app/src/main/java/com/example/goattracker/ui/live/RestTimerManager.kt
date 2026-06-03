@@ -41,6 +41,11 @@ object RestTimerManager {
     const val NAV_LIVE_WORKOUT = "live_workout"
     private const val ALARM_REQUEST_CODE = 1001
 
+    // --- Vibration (alarm-style buzz until acknowledged, capped for safety) ---
+    private const val VIBRATION_ON_MS = 800L
+    private const val VIBRATION_OFF_MS = 400L
+    private const val VIBRATION_CAP_MS = 30_000L
+
     // --- Persistence ---
     private const val PREFS_NAME = "rest_timer_prefs"
     private const val KEY_TARGET_MILLIS = "target_millis"
@@ -204,18 +209,36 @@ object RestTimerManager {
 
     fun startVibration(context: Context) {
         val vibrator = getVibrator(context)
-        // Repeating alarm-style pattern (vibrate 800ms / pause 400ms) that loops until the user
-        // stops it themselves — by "Passer", by tapping/swiping the alert, or by starting the
-        // next set. This can't get stuck forever: every dismissal path calls stopVibration(),
-        // the notification's deleteIntent covers the swipe case, and the alert channel's own
-        // vibration is disabled so it never overrides this pattern (see audit B2).
-        val pattern = longArrayOf(0, 800, 400)
+        // Alarm-style buzz (vibrate 800ms / pause 400ms) meant to keep going until the user acts —
+        // "Passer", tap/swipe the alert, or start the next set (every path calls stopVibration()).
+        // Rather than an UNBOUNDED repeat, we play a finite pattern capped at VIBRATION_CAP_MS as a
+        // safety net: if no dismissal affordance is reachable (e.g. POST_NOTIFICATIONS denied AND the
+        // app is backgrounded, so neither the alert action nor the in-app bar exists), the phone
+        // stops buzzing on its own instead of vibrating forever (audit B2).
+        val pattern = boundedAlarmVibrationPattern()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0)) // 0 = repeat from index 0
+            vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1)) // -1 = play once, no repeat
         } else {
             @Suppress("DEPRECATION")
-            vibrator.vibrate(pattern, 0)
+            vibrator.vibrate(pattern, -1)
         }
+    }
+
+    /**
+     * Builds a finite vibrate/pause waveform lasting about [VIBRATION_CAP_MS]. Played once (no repeat
+     * index) so it self-terminates; any [stopVibration] call still cancels it earlier, so in normal
+     * use the user never reaches the cap.
+     */
+    private fun boundedAlarmVibrationPattern(): LongArray {
+        val cycleMs = VIBRATION_ON_MS + VIBRATION_OFF_MS
+        val cycles = (VIBRATION_CAP_MS / cycleMs).toInt().coerceAtLeast(1)
+        val pattern = LongArray(cycles * 2 + 1)
+        pattern[0] = 0L // start vibrating immediately, no initial delay
+        for (i in 0 until cycles) {
+            pattern[i * 2 + 1] = VIBRATION_ON_MS
+            pattern[i * 2 + 2] = VIBRATION_OFF_MS
+        }
+        return pattern
     }
 
     fun stopVibration(context: Context) {
@@ -323,19 +346,29 @@ object RestTimerManager {
     // AlarmManager
     // ========================================================================
 
-    private fun scheduleAlarm(context: Context, targetMillis: Long) {
-        cancelAlarm(context)
-
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    /**
+     * Single source of truth for the backup alarm's [PendingIntent]. The [action] is part of
+     * [Intent.filterEquals], which is exactly how AlarmManager identifies an alarm to schedule or
+     * cancel. If [scheduleAlarm] and [cancelAlarm] don't build it identically, `cancel()` silently
+     * fails to match the armed alarm and it keeps firing. Keeping it here guarantees they match.
+     */
+    private fun alarmPendingIntent(context: Context): PendingIntent {
         val intent = Intent(context, RestTimerReceiver::class.java).apply {
             action = ACTION_ALARM_FIRED
         }
-        val pendingIntent = PendingIntent.getBroadcast(
+        return PendingIntent.getBroadcast(
             context,
             ALARM_REQUEST_CODE,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+    }
+
+    private fun scheduleAlarm(context: Context, targetMillis: Long) {
+        cancelAlarm(context)
+
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val pendingIntent = alarmPendingIntent(context)
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -376,13 +409,9 @@ object RestTimerManager {
 
     private fun cancelAlarm(context: Context) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, RestTimerReceiver::class.java)
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            ALARM_REQUEST_CODE,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        // Must be built identically to scheduleAlarm()'s PendingIntent (same action) — otherwise
+        // filterEquals() doesn't match and the armed alarm is never actually cancelled.
+        val pendingIntent = alarmPendingIntent(context)
         try {
             alarmManager.cancel(pendingIntent)
         } catch (e: Exception) {

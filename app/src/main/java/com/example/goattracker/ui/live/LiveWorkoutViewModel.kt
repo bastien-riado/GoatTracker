@@ -148,8 +148,17 @@ class LiveWorkoutViewModel(
         elapsedTimerJob?.cancel()
         elapsedTimerJob = viewModelScope.launch {
             while (true) {
+                // Derive the elapsed time from the session's wall-clock startTime instead of
+                // accumulating delay(1000) ticks. delay() is uptime-based and pauses while the
+                // process is suspended (screen off / Doze), which froze the counter. Reading the
+                // wall clock keeps it accurate in the background and self-corrects on resume; the
+                // loop now only serves to refresh the display roughly once per second.
+                val startTime = _uiState.value.activeSession?.startTime
+                if (startTime != null) {
+                    val elapsed = ((System.currentTimeMillis() - startTime) / 1000L).toInt()
+                    _uiState.update { it.copy(elapsedSeconds = elapsed) }
+                }
                 delay(1000)
-                _uiState.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
             }
         }
     }

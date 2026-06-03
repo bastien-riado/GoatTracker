@@ -550,6 +550,29 @@ fun LiveWorkoutScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // Create a brand-new exercise without leaving the session: navigates to the full
+                    // create screen; on save we return here and the new exercise is auto-added.
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.prepareAutoAddOnReturn()
+                            viewModel.setExercisePickerOpen(false)
+                            onCreateExercise()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
+                            brush = Brush.linearGradient(listOf(Accent, Accent))
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = Accent)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Créer un nouvel exercice", color = Accent, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     val filteredPickerList = state.availableExercises.filter { exercise ->
                         val matchesQuery = exercise.name.contains(pickerSearchQuery, ignoreCase = true) ||
                                 exercise.primaryMuscle.contains(pickerSearchQuery, ignoreCase = true)
@@ -595,29 +618,6 @@ fun LiveWorkoutScreen(
                                 }
                             }
                         }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Create a brand-new exercise without leaving the session: navigates to the full
-                    // create screen; on save we return here and the new exercise is auto-added.
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.prepareAutoAddOnReturn()
-                            viewModel.setExercisePickerOpen(false)
-                            onCreateExercise()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                        border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
-                            brush = Brush.linearGradient(listOf(Accent, Accent))
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = Accent)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Créer un nouvel exercice", color = Accent, fontWeight = FontWeight.Bold)
                     }
                 }
             }
