@@ -6,7 +6,10 @@ import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.TrackingType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -33,7 +36,14 @@ class LiveWorkoutViewModelTest {
         val testDispatcher = UnconfinedTestDispatcher(testScheduler)
         val testScope = TestScope(testDispatcher)
         val repository = DefaultDataRepository(storageDir = null, dispatcher = testDispatcher, scope = testScope)
-        val viewModel = LiveWorkoutViewModel(repository)
+        val viewModel = LiveWorkoutViewModel(
+            dataRepository = repository,
+            restTimer = FakeRestTimer(),
+            // Finite tickers: the elapsed/countdown display loops emit once and complete instead of
+            // looping forever in viewModelScope — that unbounded loop is what used to hang the suite.
+            elapsedTicker = flowOf(Unit),
+            countdownTicker = flowOf(Unit),
+        )
         if (startSession) {
             viewModel.startNewSession()
         }
@@ -77,7 +87,8 @@ class LiveWorkoutViewModelTest {
 
         val exerciseSession = state.activeSession!!.exercises.first()
         assertEquals("ex-1", exerciseSession.exercise.id)
-        assertEquals(1, exerciseSession.sets.size)
+        // A new WEIGHT_REPS exercise with no prior history seeds 2 default sets (20kg x10).
+        assertEquals(2, exerciseSession.sets.size)
         assertEquals(20.0, exerciseSession.sets.first().weight, 0.0)
         assertEquals(10, exerciseSession.sets.first().reps)
     }
@@ -86,34 +97,36 @@ class LiveWorkoutViewModelTest {
     fun viewModel_addSet_incrementsAndCopiesValues() = runTest {
         val (viewModel, _) = createTestViewModel(testScheduler)
 
-        viewModel.addExerciseToSession(testExercise)
-        val firstSetId = viewModel.uiState.value.activeSession!!.exercises.first().sets.first().id
-        viewModel.updateSetValues("ex-1", firstSetId, weight = 60.0, reps = 8)
+        viewModel.addExerciseToSession(testExercise) // seeds 2 default sets
+        // Update the LAST existing set, then add one: the new set should copy that set's values.
+        val lastSetId = viewModel.uiState.value.activeSession!!.exercises.first().sets.last().id
+        viewModel.updateSetValues("ex-1", lastSetId, weight = 60.0, reps = 8)
         viewModel.addSetToExercise("ex-1")
 
         val sets = viewModel.uiState.value.activeSession!!.exercises.first().sets
-        assertEquals(2, sets.size)
-        assertEquals(2, sets[1].setNumber)
-        assertEquals(60.0, sets[1].weight, 0.0)
-        assertEquals(8, sets[1].reps)
-        assertFalse(sets[1].isCompleted)
+        assertEquals(3, sets.size)
+        assertEquals(3, sets[2].setNumber)
+        assertEquals(60.0, sets[2].weight, 0.0)
+        assertEquals(8, sets[2].reps)
+        assertFalse(sets[2].isCompleted)
     }
 
     @Test
     fun viewModel_deleteSet_recalculatesSetNumbers() = runTest {
         val (viewModel, _) = createTestViewModel(testScheduler)
 
-        viewModel.addExerciseToSession(testExercise)
-        viewModel.addSetToExercise("ex-1")
-        viewModel.addSetToExercise("ex-1")
+        viewModel.addExerciseToSession(testExercise) // 2 default sets
+        viewModel.addSetToExercise("ex-1")           // 3
+        viewModel.addSetToExercise("ex-1")           // 4
 
         val firstSetId = viewModel.uiState.value.activeSession!!.exercises.first().sets[0].id
         viewModel.deleteSetFromExercise("ex-1", firstSetId)
 
         val sets = viewModel.uiState.value.activeSession!!.exercises.first().sets
-        assertEquals(2, sets.size)
+        assertEquals(3, sets.size)
         assertEquals(1, sets[0].setNumber)
         assertEquals(2, sets[1].setNumber)
+        assertEquals(3, sets[2].setNumber)
     }
 
     @Test
@@ -303,4 +316,34 @@ class LiveWorkoutViewModelTest {
         assertEquals(1, viewModel.uiState.value.totalExercises)
         assertEquals(1, viewModel.uiState.value.totalCompletedSets)
     }
+}
+
+/**
+ * In-memory [RestTimer] for tests: no Android, no service, no alarm. Mirrors the contract the
+ * ViewModel relies on (state stream + remainingSeconds) so timer-driven UI state can be asserted.
+ */
+private class FakeRestTimer : RestTimer {
+    private val _state = MutableStateFlow<RestTimerState>(RestTimerState.Idle)
+    override val state: StateFlow<RestTimerState> = _state
+    private var remaining = 0
+
+    override fun start(durationSeconds: Int) {
+        remaining = durationSeconds
+        _state.value = RestTimerState.Counting(
+            targetMillis = System.currentTimeMillis() + durationSeconds * 1000L,
+            durationSeconds = durationSeconds,
+        )
+    }
+
+    override fun acknowledge() {
+        remaining = 0
+        _state.value = RestTimerState.Idle
+    }
+
+    override fun cancelAll() {
+        remaining = 0
+        _state.value = RestTimerState.Idle
+    }
+
+    override fun remainingSeconds(): Int = remaining
 }

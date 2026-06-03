@@ -1,15 +1,16 @@
 package com.example.goattracker.ui.live
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.goattracker.data.DataRepository
 import com.example.goattracker.domain.model.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -32,7 +33,13 @@ data class LiveWorkoutUiState(
 
 class LiveWorkoutViewModel(
     private val dataRepository: DataRepository,
-    private val applicationContext: Context? = null
+    private val restTimer: RestTimer,
+    private val clock: () -> Long = System::currentTimeMillis,
+    // Display tickers are injected so production uses a real repeating clock while tests pass a
+    // finite flow (flowOf(Unit)) — the loops then emit once and complete instead of looping forever
+    // in viewModelScope, which is what used to hang the unit-test suite.
+    private val elapsedTicker: Flow<Unit> = flow { while (true) { emit(Unit); delay(1000) } },
+    private val countdownTicker: Flow<Unit> = flow { while (true) { emit(Unit); delay(500) } },
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LiveWorkoutUiState())
@@ -70,9 +77,9 @@ class LiveWorkoutViewModel(
             }
         }
 
-        // Observe the global RestTimerManager state and reflect it in the UI
+        // Observe the rest-timer state and reflect it in the UI
         timerObserverJob = viewModelScope.launch {
-            RestTimerManager.state.collect { timerState ->
+            restTimer.state.collect { timerState ->
                 when (timerState) {
                     is RestTimerState.Counting -> {
                         // Start a local countdown display loop
@@ -99,35 +106,22 @@ class LiveWorkoutViewModel(
     private fun launchCountdownLoop() {
         countdownDisplayJob?.cancel()
         countdownDisplayJob = viewModelScope.launch {
-            while (true) {
-                val remaining = RestTimerManager.getRemainingSeconds()
-                if (remaining <= 0) {
-                    // Don't set finished here — let the Manager/Receiver handle the transition
-                    break
-                }
+            // Refresh the displayed remaining time on each tick. The Counting -> Finished transition
+            // is owned by the timer (service/alarm), not this display loop; here we only render.
+            countdownTicker.collect {
+                val remaining = restTimer.remainingSeconds()
+                if (remaining <= 0) return@collect
                 _uiState.update {
                     it.copy(timerRemainingSeconds = remaining, isRestTimerVibrating = false)
                 }
-                if (applicationContext == null) {
-                    // In a JVM unit test, wall clock System.currentTimeMillis() does not advance
-                    // with virtual delay(), so break immediately to prevent infinite loop.
-                    break
-                }
-                delay(500)
             }
         }
     }
 
     fun startNewSession() {
-        // Cancel any existing timers from previous session
+        // Cancel any existing timers from a previous session
         elapsedTimerJob?.cancel()
-        val context = applicationContext
-        if (context != null) {
-            RestTimerManager.cancelAll(context)
-            RestTimerService.stop(context)
-        } else {
-            RestTimerManager.acknowledgeForTesting()
-        }
+        restTimer.cancelAll()
 
         val newSession = WorkoutSession(
             name = "Séance du ${getCurrentDateString()}",
@@ -147,18 +141,14 @@ class LiveWorkoutViewModel(
     private fun startElapsedTimer() {
         elapsedTimerJob?.cancel()
         elapsedTimerJob = viewModelScope.launch {
-            while (true) {
-                // Derive the elapsed time from the session's wall-clock startTime instead of
-                // accumulating delay(1000) ticks. delay() is uptime-based and pauses while the
-                // process is suspended (screen off / Doze), which froze the counter. Reading the
-                // wall clock keeps it accurate in the background and self-corrects on resume; the
-                // loop now only serves to refresh the display roughly once per second.
-                val startTime = _uiState.value.activeSession?.startTime
-                if (startTime != null) {
-                    val elapsed = ((System.currentTimeMillis() - startTime) / 1000L).toInt()
-                    _uiState.update { it.copy(elapsedSeconds = elapsed) }
-                }
-                delay(1000)
+            // Derive elapsed time from the session's wall-clock startTime rather than accumulating
+            // ticks: delay() is uptime-based and pauses while the process is suspended (screen off /
+            // Doze), which used to freeze the counter. Reading the wall clock self-corrects on
+            // resume; the ticker only paces the display refresh.
+            elapsedTicker.collect {
+                val startTime = _uiState.value.activeSession?.startTime ?: return@collect
+                val elapsed = ((clock() - startTime) / 1000L).toInt()
+                _uiState.update { it.copy(elapsedSeconds = elapsed) }
             }
         }
     }
@@ -362,13 +352,7 @@ class LiveWorkoutViewModel(
 
         // Stop all timers
         elapsedTimerJob?.cancel()
-        val context = applicationContext
-        if (context != null) {
-            RestTimerManager.cancelAll(context)
-            RestTimerService.stop(context)
-        } else {
-            RestTimerManager.acknowledgeForTesting()
-        }
+        restTimer.cancelAll()
 
         // Filter out exercises that have no completed sets to keep logs clean
         val filteredExercises = currentSession.exercises.map { exSession ->
@@ -392,13 +376,7 @@ class LiveWorkoutViewModel(
     fun discardSession() {
         // Stop all timers, don't save anything
         elapsedTimerJob?.cancel()
-        val context = applicationContext
-        if (context != null) {
-            RestTimerManager.cancelAll(context)
-            RestTimerService.stop(context)
-        } else {
-            RestTimerManager.acknowledgeForTesting()
-        }
+        restTimer.cancelAll()
         // Reset to a clean slate so re-entering the screen starts a brand-new session.
         _uiState.update { LiveWorkoutUiState(availableExercises = it.availableExercises) }
     }
@@ -419,23 +397,11 @@ class LiveWorkoutViewModel(
     }
 
     private fun startRestTimer(durationSeconds: Int) {
-        val context = applicationContext
-        if (context != null) {
-            RestTimerManager.startTimer(context, durationSeconds)
-            RestTimerService.start(context)
-        } else {
-            RestTimerManager.startTimerForTesting(durationSeconds)
-        }
+        restTimer.start(durationSeconds)
     }
 
     fun acknowledgeRestTimer() {
-        val context = applicationContext
-        if (context != null) {
-            RestTimerManager.acknowledge(context)
-            RestTimerService.stop(context)
-        } else {
-            RestTimerManager.acknowledgeForTesting()
-        }
+        restTimer.acknowledge()
     }
 
     override fun onCleared() {

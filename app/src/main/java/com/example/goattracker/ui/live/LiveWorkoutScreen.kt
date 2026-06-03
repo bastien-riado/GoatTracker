@@ -55,7 +55,7 @@ fun LiveWorkoutScreen(
     val viewModel: LiveWorkoutViewModel = viewModel {
         LiveWorkoutViewModel(
             dataRepository = DefaultDataRepository.getInstance(context.filesDir),
-            applicationContext = context.applicationContext
+            restTimer = AndroidRestTimer(context)
         )
     }
 
