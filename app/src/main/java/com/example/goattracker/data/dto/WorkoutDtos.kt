@@ -134,12 +134,15 @@ fun WorkoutSession.toDto(): WorkoutSessionDto {
 @Serializable
 data class WorkoutStateDto(
     val exercises: List<ExerciseDto>,
-    val sessions: List<WorkoutSessionDto>
+    val sessions: List<WorkoutSessionDto>,
+    // Defaulted so existing on-disk files (written before this field existed) still deserialize.
+    val activeDraft: WorkoutSessionDto? = null
 ) {
     fun toDomain(): WorkoutState {
         return WorkoutState(
             exercises = exercises.map { it.toDomain() },
-            sessions = sessions.map { it.toDomain() }
+            sessions = sessions.map { it.toDomain() },
+            activeDraft = activeDraft?.toDomain()
         )
     }
 }
@@ -147,6 +150,7 @@ data class WorkoutStateDto(
 fun WorkoutState.toDto(): WorkoutStateDto {
     return WorkoutStateDto(
         exercises = exercises.map { it.toDto() },
-        sessions = sessions.map { it.toDto() }
+        sessions = sessions.map { it.toDto() },
+        activeDraft = activeDraft?.toDto()
     )
 }

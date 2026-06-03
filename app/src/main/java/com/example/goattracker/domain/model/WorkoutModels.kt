@@ -93,5 +93,8 @@ data class WorkoutSession(
 
 data class WorkoutState(
     val exercises: List<Exercise> = emptyList(),
-    val sessions: List<WorkoutSession> = emptyList()
+    val sessions: List<WorkoutSession> = emptyList(),
+    // In-progress live session, persisted so it survives process death (audit P0-1).
+    // Null when no session is active; cleared on save or discard.
+    val activeDraft: WorkoutSession? = null
 )

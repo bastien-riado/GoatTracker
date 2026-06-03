@@ -35,6 +35,9 @@ interface DataRepository {
     suspend fun addWorkoutSession(session: WorkoutSession)
     suspend fun updateWorkoutSession(session: WorkoutSession)
     suspend fun deleteWorkoutSession(sessionId: String)
+
+    /** Persist (or clear, when null) the in-progress live session so it survives process death. */
+    suspend fun saveActiveDraft(session: WorkoutSession?)
 }
 
 class DefaultDataRepository(
@@ -167,6 +170,11 @@ class DefaultDataRepository(
         _workoutState.update { current ->
             current.copy(sessions = current.sessions.filter { it.id != sessionId })
         }
+        saveToDisk()
+    }
+
+    override suspend fun saveActiveDraft(session: WorkoutSession?) {
+        _workoutState.update { it.copy(activeDraft = session) }
         saveToDisk()
     }
 

@@ -70,9 +70,8 @@ fun LiveWorkoutScreen(
     // Start a fresh session only if one doesn't already exist
     // (protects against recomposition or config change re-triggering)
     LaunchedEffect(Unit) {
-        if (viewModel.uiState.value.activeSession == null) {
-            viewModel.startNewSession()
-        }
+        // Resume a persisted in-progress session (e.g. after process death) or start a fresh one.
+        viewModel.startOrResumeSession()
     }
 
     // Dynamic request for POST_NOTIFICATIONS permission on Android 13+
