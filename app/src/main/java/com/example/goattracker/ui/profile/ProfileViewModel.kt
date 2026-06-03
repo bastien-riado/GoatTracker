@@ -6,6 +6,8 @@ import com.example.goattracker.data.DataRepository
 import com.example.goattracker.domain.OneRepMaxFormula
 import com.example.goattracker.domain.OneRepMaxStrategy
 import com.example.goattracker.domain.model.*
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +25,8 @@ data class ProfileUiState(
 )
 
 class ProfileViewModel(
-    private val dataRepository: DataRepository
+    private val dataRepository: DataRepository,
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -32,7 +35,8 @@ class ProfileViewModel(
     private val epleyStrategy = OneRepMaxFormula.EPLEY.strategy
 
     init {
-        viewModelScope.launch {
+        // Stats are O(sessions x exercises x sets); compute off the main thread.
+        viewModelScope.launch(defaultDispatcher) {
             dataRepository.workoutState.collect { state ->
                 calculateStats(state)
             }
@@ -41,7 +45,7 @@ class ProfileViewModel(
 
     fun selectExercise(exercise: Exercise) {
         _uiState.update { it.copy(selectedExercise = exercise) }
-        viewModelScope.launch {
+        viewModelScope.launch(defaultDispatcher) {
             val latestState = dataRepository.getLatestState()
             calculateOneRepMaxProgression(exercise, latestState.sessions)
         }

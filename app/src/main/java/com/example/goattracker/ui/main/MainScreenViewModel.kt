@@ -6,11 +6,13 @@ import com.example.goattracker.data.DataRepository
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.TrackingType
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -49,8 +51,10 @@ class MainScreenViewModel(private val dataRepository: DataRepository) : ViewMode
             exerciseStats = statsMap
         )
     }.map<MainScreenUiState.Success, MainScreenUiState> { it }
-    .catch { 
-        emit(MainScreenUiState.Error(it)) 
+    // Per-exercise stats are recomputed on every state/query change; run that off the main thread.
+    .flowOn(Dispatchers.Default)
+    .catch {
+        emit(MainScreenUiState.Error(it))
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),

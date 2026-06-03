@@ -10,6 +10,8 @@ import com.example.goattracker.domain.model.WorkoutState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -47,6 +49,8 @@ class DefaultDataRepository(
 ) : DataRepository {
 
     companion object {
+        private const val SAVE_DEBOUNCE_MS = 300L
+
         @Volatile
         private var INSTANCE: DefaultDataRepository? = null
 
@@ -63,6 +67,8 @@ class DefaultDataRepository(
     }
 
     private val mutex = Mutex()
+    @Volatile
+    private var saveJob: Job? = null
     private val stateFile: File? = storageDir?.let { File(it, "workouts.json") }
     private val tempFile: File? = storageDir?.let { File(it, "workouts.json.tmp") }
 
@@ -109,9 +115,15 @@ class DefaultDataRepository(
     }
 
     private fun saveToDisk() {
-        val nextState = _workoutState.value
-        scope.launch {
-            saveToDiskInternal(nextState)
+        // Coalesce bursts of mutations (typing in a set field, or persisting the live draft on every
+        // set edit): cancel the pending write and reschedule, turning once-per-keystroke full-file
+        // rewrites into one write per quiet window. _workoutState is already updated synchronously by
+        // callers, so only the DISK write is delayed (<= SAVE_DEBOUNCE_MS); a process kill inside that
+        // window loses at most the last edit — an acceptable trade for the write reduction.
+        saveJob?.cancel()
+        saveJob = scope.launch {
+            delay(SAVE_DEBOUNCE_MS)
+            saveToDiskInternal(_workoutState.value)
         }
     }
 
