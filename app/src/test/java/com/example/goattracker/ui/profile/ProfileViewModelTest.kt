@@ -39,7 +39,7 @@ class ProfileViewModelTest {
         val testDispatcher = UnconfinedTestDispatcher(testScheduler)
         val testScope = TestScope(testDispatcher)
         val repository = DefaultDataRepository(storageDir = null, dispatcher = testDispatcher, scope = testScope)
-        val viewModel = ProfileViewModel(repository)
+        val viewModel = ProfileViewModel(repository, testDispatcher)
 
         val state = viewModel.uiState.value
         assertEquals(0, state.totalWorkouts)
@@ -100,7 +100,7 @@ class ProfileViewModelTest {
             )
         )
 
-        val viewModel = ProfileViewModel(repository)
+        val viewModel = ProfileViewModel(repository, testDispatcher)
         val state = viewModel.uiState.value
 
         assertEquals(2, state.totalWorkouts)

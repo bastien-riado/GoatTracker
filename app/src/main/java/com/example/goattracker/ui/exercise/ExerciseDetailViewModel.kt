@@ -6,6 +6,8 @@ import com.example.goattracker.data.DataRepository
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.TrackingType
 import com.example.goattracker.domain.model.WorkoutSession
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,14 +40,16 @@ sealed interface ExerciseDetailUiState {
 
 class ExerciseDetailViewModel(
     private val dataRepository: DataRepository,
-    private val exerciseId: String
+    private val exerciseId: String,
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ExerciseDetailUiState>(ExerciseDetailUiState.Loading)
     val uiState: StateFlow<ExerciseDetailUiState> = _uiState.asStateFlow()
 
     init {
-        viewModelScope.launch {
+        // Heavy per-exercise aggregation; compute off the main thread.
+        viewModelScope.launch(defaultDispatcher) {
             dataRepository.workoutState.collectLatest { state ->
                 val exercise = state.exercises.firstOrNull { it.id == exerciseId }
                 if (exercise == null) {
