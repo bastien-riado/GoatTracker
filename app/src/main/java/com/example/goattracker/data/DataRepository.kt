@@ -95,7 +95,9 @@ class DefaultDataRepository(
                     _workoutState.value = parsedDto.toDomain()
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    // Recover safely to avoid total data loss
+                    // Preserve the unreadable file instead of silently wiping the user's history
+                    // (the old "recover" path WAS the data loss). Then fall back to defaults.
+                    backupCorruptFile(stateFile)
                     _workoutState.value = WorkoutState(exercises = defaultExercises())
                 }
             }
@@ -130,6 +132,23 @@ class DefaultDataRepository(
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    /**
+     * Moves an unparseable state file aside (workouts.corrupt-<ts>.json) so the user's data can be
+     * recovered or inspected rather than overwritten. Best-effort; never throws into the caller.
+     * Called from within the load mutex but touches only the filesystem, so no re-entrant lock.
+     */
+    private fun backupCorruptFile(file: File) {
+        try {
+            if (!file.exists()) return
+            val backup = File(file.parentFile, "workouts.corrupt-${System.currentTimeMillis()}.json")
+            if (!file.renameTo(backup)) {
+                file.copyTo(backup, overwrite = true)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
