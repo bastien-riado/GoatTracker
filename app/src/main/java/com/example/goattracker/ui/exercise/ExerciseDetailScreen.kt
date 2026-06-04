@@ -32,6 +32,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -553,7 +555,7 @@ fun ExerciseProgressChart(
     trackingType: TrackingType,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier) {
+    Canvas(modifier = modifier.semantics { contentDescription = "Graphique d'évolution du volume de l'exercice" }) {
         if (volumes.size < 2) return@Canvas
 
         val maxVolume = volumes.maxOrNull() ?: 1.0

@@ -70,7 +70,8 @@ class MainActivity : ComponentActivity() {
                     // even when the data loads near-instantly.
                     var minTimePassed by remember { mutableStateOf(false) }
                     LaunchedEffect(Unit) {
-                        delay(1400)
+                        // Brief branded-splash minimum (was 1400ms — an over-long forced wait).
+                        delay(600)
                         minTimePassed = true
                     }
 

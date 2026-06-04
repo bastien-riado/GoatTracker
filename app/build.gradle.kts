@@ -108,7 +108,7 @@ dependencies {
   implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 
   // Serialization JSON
-  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+  implementation(libs.kotlinx.serialization.json)
 
   // Material Icons Core
   implementation("androidx.compose.material:material-icons-core")
