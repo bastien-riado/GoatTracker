@@ -356,45 +356,13 @@ object RestTimerManager {
 
     private fun scheduleAlarm(context: Context, targetMillis: Long) {
         cancelAlarm(context)
-
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pendingIntent = alarmPendingIntent(context)
-
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP, targetMillis, pendingIntent
-                    )
-                } else {
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP, targetMillis, pendingIntent
-                    )
-                }
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP, targetMillis, pendingIntent
-                )
-            } else {
-                alarmManager.setExact(
-                    AlarmManager.RTC_WAKEUP, targetMillis, pendingIntent
-                )
-            }
-        } catch (e: SecurityException) {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP, targetMillis, pendingIntent
-                    )
-                } else {
-                    alarmManager.set(
-                        AlarmManager.RTC_WAKEUP, targetMillis, pendingIntent
-                    )
-                }
-            } catch (ex: Exception) {
-                ex.printStackTrace()
-            }
-        }
+        // Inexact backup alarm — deliberately NOT an exact alarm, so the app needs neither
+        // SCHEDULE_EXACT_ALARM nor USE_EXACT_ALARM (both Play-policy-restricted). The foreground
+        // service drives the precise finish while the process is alive; this only fires if the
+        // process was killed, where a few minutes of Doze drift is acceptable. setAndAllowWhileIdle
+        // is API 23+ and minSdk is 24, so no version guard is needed.
+        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, targetMillis, alarmPendingIntent(context))
     }
 
     private fun cancelAlarm(context: Context) {
