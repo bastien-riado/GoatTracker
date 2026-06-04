@@ -6,9 +6,12 @@ import com.example.goattracker.data.DataRepository
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.TrackingType
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -18,8 +21,7 @@ data class CreateExerciseUiState(
     val primaryMuscle: String = "",
     val trackingType: TrackingType = TrackingType.WEIGHT_REPS,
     val notes: String = "",
-    val restTimeSeconds: Int = 90,
-    val isSaved: Boolean = false
+    val restTimeSeconds: Int = 90
 ) {
     val isSaveEnabled: Boolean
         get() = name.isNotBlank() && primaryMuscle.isNotBlank()
@@ -32,6 +34,11 @@ class CreateExerciseViewModel(
 
     private val _uiState = MutableStateFlow(CreateExerciseUiState())
     val uiState: StateFlow<CreateExerciseUiState> = _uiState.asStateFlow()
+
+    // One-shot "saved" signal, consumed once. A Channel rather than a sticky UiState boolean, so it
+    // can't re-fire navigation on recomposition / config change the way a flag in state would.
+    private val _savedEvents = Channel<Unit>(Channel.BUFFERED)
+    val savedEvents: Flow<Unit> = _savedEvents.receiveAsFlow()
 
     init {
         if (exerciseId != null) {
@@ -88,7 +95,7 @@ class CreateExerciseViewModel(
                 restTimeSeconds = currentState.restTimeSeconds
             )
             dataRepository.addExercise(newExercise)
-            _uiState.update { it.copy(isSaved = true) }
+            _savedEvents.send(Unit)
         }
     }
 }
