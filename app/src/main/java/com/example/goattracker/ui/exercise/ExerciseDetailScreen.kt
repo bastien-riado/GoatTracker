@@ -86,11 +86,9 @@ fun ExerciseDetailScreen(
         }
     }
 
-    // Auto navigate back if deleted
-    LaunchedEffect(state) {
-        if (state is ExerciseDetailUiState.Success && (state as ExerciseDetailUiState.Success).isDeleted) {
-            onBackClick()
-        }
+    // Navigate back when the delete completes — a one-shot event, fires exactly once.
+    LaunchedEffect(Unit) {
+        viewModel.deletedEvents.collect { onBackClick() }
     }
 
     Scaffold(

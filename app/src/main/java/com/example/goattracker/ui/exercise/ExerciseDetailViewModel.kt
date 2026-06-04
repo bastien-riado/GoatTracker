@@ -3,15 +3,19 @@ package com.example.goattracker.ui.exercise
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.goattracker.data.DataRepository
+import com.example.goattracker.domain.OneRepMaxFormula
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.TrackingType
 import com.example.goattracker.domain.model.WorkoutSession
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -33,8 +37,7 @@ sealed interface ExerciseDetailUiState {
         val volumeHistory: List<Double>,
         val volumeHistoryLabels: List<String>,
         val sessions: List<WorkoutSession>,
-        val lastExerciseSession: com.example.goattracker.domain.model.ExerciseSession? = null,
-        val isDeleted: Boolean = false
+        val lastExerciseSession: com.example.goattracker.domain.model.ExerciseSession? = null
     ) : ExerciseDetailUiState
 }
 
@@ -47,16 +50,23 @@ class ExerciseDetailViewModel(
     private val _uiState = MutableStateFlow<ExerciseDetailUiState>(ExerciseDetailUiState.Loading)
     val uiState: StateFlow<ExerciseDetailUiState> = _uiState.asStateFlow()
 
+    // One-shot "deleted, navigate away" signal (consumed once) instead of a sticky UiState flag.
+    private val _deletedEvents = Channel<Unit>(Channel.BUFFERED)
+    val deletedEvents: Flow<Unit> = _deletedEvents.receiveAsFlow()
+
+    // Guards the brief window between requesting a delete and the workoutState collector seeing the
+    // exercise gone, so it doesn't flash a "not found" error on the way out.
+    @Volatile
+    private var isDeleting = false
+
     init {
         // Heavy per-exercise aggregation; compute off the main thread.
         viewModelScope.launch(defaultDispatcher) {
             dataRepository.workoutState.collectLatest { state ->
                 val exercise = state.exercises.firstOrNull { it.id == exerciseId }
                 if (exercise == null) {
-                    if (_uiState.value is ExerciseDetailUiState.Success && (_uiState.value as ExerciseDetailUiState.Success).isDeleted) {
-                        // Safe state transition when already deleted
-                        return@collectLatest
-                    }
+                    // A delete we initiated is in flight; navigation is handled via deletedEvents.
+                    if (isDeleting) return@collectLatest
                     _uiState.value = ExerciseDetailUiState.Error("Exercice non trouvé")
                     return@collectLatest
                 }
@@ -81,7 +91,7 @@ class ExerciseDetailViewModel(
                         maxWeight = set.weight
                     }
                     if (exercise.trackingType == TrackingType.WEIGHT_REPS && set.weight > 0 && set.reps > 0) {
-                        val epley1RM = set.weight * (1.0 + set.reps / 30.0)
+                        val epley1RM = OneRepMaxFormula.EPLEY.strategy.calculate(set.weight, set.reps)
                         if (epley1RM > estimated1RM) {
                             estimated1RM = epley1RM
                         }
@@ -195,12 +205,11 @@ class ExerciseDetailViewModel(
     }
 
     fun deleteExercise() {
-        val currentState = _uiState.value
-        if (currentState is ExerciseDetailUiState.Success) {
-            _uiState.value = currentState.copy(isDeleted = true)
-            viewModelScope.launch {
-                dataRepository.deleteExercise(exerciseId)
-            }
+        if (_uiState.value !is ExerciseDetailUiState.Success) return
+        isDeleting = true
+        viewModelScope.launch {
+            dataRepository.deleteExercise(exerciseId)
+            _deletedEvents.send(Unit)
         }
     }
 }

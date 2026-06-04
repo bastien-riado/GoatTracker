@@ -32,7 +32,6 @@ class CreateExerciseViewModelTest {
         assertEquals(ExerciseCategory.PUSH, state.category)
         assertEquals("", state.primaryMuscle)
         assertEquals(TrackingType.WEIGHT_REPS, state.trackingType)
-        assertFalse(state.isSaved)
         assertFalse(state.isSaveEnabled)
     }
 
@@ -75,8 +74,8 @@ class CreateExerciseViewModelTest {
         // Save
         viewModel.saveExercise()
 
-        val state = viewModel.uiState.value
-        assertTrue(state.isSaved)
+        // saveExercise emits a one-shot "saved" event (consumed once) instead of a sticky flag.
+        assertEquals(Unit, viewModel.savedEvents.first())
 
         // Verify that the exercise has been successfully inserted into repository database
         val repoState = repository.workoutState.first()

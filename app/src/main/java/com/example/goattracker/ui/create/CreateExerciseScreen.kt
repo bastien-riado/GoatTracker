@@ -43,11 +43,9 @@ fun CreateExerciseScreen(
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Reactive navigation back once saved
-    LaunchedEffect(state.isSaved) {
-        if (state.isSaved) {
-            onBackClick()
-        }
+    // Navigate back when the save completes — a one-shot event, so it fires exactly once.
+    LaunchedEffect(Unit) {
+        viewModel.savedEvents.collect { onBackClick() }
     }
 
     Scaffold(
