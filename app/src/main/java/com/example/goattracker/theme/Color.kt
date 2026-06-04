@@ -13,7 +13,7 @@ val SurfaceElevated = Color(0xFF1E1E1E)
 val Fg = Color(0xFFFFFFFF)
 val Fg2 = Color(0xFFE0E0E0)
 val Muted = Color(0xFFA0A0A0)
-val Meta = Color(0xFF606060)
+val Meta = Color(0xFF8A8A8A) // lightened from 0x606060 for WCAG AA contrast (~5.8:1 on Bg)
 
 // Accent tokens
 val Accent = Color(0xFFFF3366)

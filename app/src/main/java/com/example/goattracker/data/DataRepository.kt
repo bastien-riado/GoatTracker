@@ -31,7 +31,7 @@ interface DataRepository {
     /** Emits true once the initial load from disk has completed (used to gate the splash screen). */
     val isReady: StateFlow<Boolean>
 
-    suspend fun getLatestState(): WorkoutState
+    fun getLatestState(): WorkoutState
     suspend fun addExercise(exercise: Exercise)
     suspend fun deleteExercise(exerciseId: String)
     suspend fun addWorkoutSession(session: WorkoutSession)
@@ -164,7 +164,7 @@ class DefaultDataRepository(
         }
     }
 
-    override suspend fun getLatestState(): WorkoutState = _workoutState.value
+    override fun getLatestState(): WorkoutState = _workoutState.value
 
     override suspend fun addExercise(exercise: Exercise) {
         _workoutState.update { current ->

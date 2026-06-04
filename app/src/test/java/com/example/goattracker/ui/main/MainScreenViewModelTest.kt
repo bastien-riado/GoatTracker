@@ -12,7 +12,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainScreenViewModelTest {
   @Test
-  fun uiState_initiallyLoading() = runTest {
+  fun uiState_emitsSuccessWithExercisesAndStats() = runTest {
     val testDispatcher = UnconfinedTestDispatcher(testScheduler)
     val testScope = TestScope(testDispatcher)
     

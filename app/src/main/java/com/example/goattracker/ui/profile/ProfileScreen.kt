@@ -28,6 +28,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -362,7 +364,7 @@ fun OneRepMaxLineChart(
     points: List<Pair<Long, Double>>,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier) {
+    Canvas(modifier = modifier.semantics { contentDescription = "Graphique d'évolution du 1RM estimé" }) {
         val maxVal = points.maxOf { it.second }
         val minVal = points.minOf { it.second }
         val valueRange = if (maxVal == minVal) 1.0 else maxVal - minVal
@@ -499,7 +501,7 @@ fun MuscleRadarChart(
     data: Map<String, Int>,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier) {
+    Canvas(modifier = modifier.semantics { contentDescription = "Graphique radar de la répartition du travail musculaire" }) {
         val muscles = listOf("Pectoraux", "Dos", "Épaules", "Quadriceps", "Ischio-jambiers", "Biceps", "Triceps", "Abdominaux")
         val maxVal = data.values.maxOrNull() ?: 1
         val maxSets = if (maxVal == 0) 1 else maxVal
@@ -823,7 +825,7 @@ fun SessionVolumesBarChart(
     volumes: List<Pair<String, Double>>,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier) {
+    Canvas(modifier = modifier.semantics { contentDescription = "Graphique du volume total par séance" }) {
         val maxVolume = volumes.maxOfOrNull { it.second } ?: 0.0
         val maxVolumeVal = if (maxVolume == 0.0) 1.0 else maxVolume
 
