@@ -373,16 +373,10 @@ class LiveWorkoutViewModel(
         elapsedTimerJob?.cancel()
         restTimer.cancelAll()
 
-        // Filter out exercises that have no completed sets to keep logs clean
-        val filteredExercises = currentSession.exercises.map { exSession ->
-            exSession.copy(sets = exSession.sets.filter { it.isCompleted })
-        }.filter { it.sets.isNotEmpty() }
-
-        if (filteredExercises.isNotEmpty()) {
-            val finishedSession = currentSession.copy(
-                endTime = System.currentTimeMillis(),
-                exercises = filteredExercises
-            )
+        // Same finish rule as the out-of-screen path (ActiveSessionController, notification
+        // "Terminer"): drop incomplete sets / empty exercises and stamp the end time. Shared via
+        // toFinishedOrNull so the two finish paths cannot drift apart.
+        currentSession.toFinishedOrNull(System.currentTimeMillis())?.let { finishedSession ->
             viewModelScope.launch {
                 dataRepository.addWorkoutSession(finishedSession)
             }

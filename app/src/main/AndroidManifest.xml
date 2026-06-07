@@ -38,6 +38,17 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Workout rest timer countdown for fitness tracking" />
         </service>
+
+        <receiver android:name=".ui.live.WorkoutSessionReceiver" android:exported="false" />
+
+        <service
+            android:name=".ui.live.WorkoutSessionService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Live workout session presence for fitness tracking" />
+        </service>
     </application>
 
 </manifest>

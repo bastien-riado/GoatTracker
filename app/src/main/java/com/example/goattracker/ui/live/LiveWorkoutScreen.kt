@@ -61,9 +61,11 @@ fun LiveWorkoutScreen(
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Block system back button — only way out is via "Terminer"
+    // Back / predictive-back no longer ENDS the session — it MINIMIZES it. Popping the live entry
+    // returns to the previous screen, where the persistent mini-player keeps the session in view and
+    // in reach. Ending the session still happens only through "Terminer" (save or discard).
     BackHandler(enabled = true) {
-        viewModel.requestFinishSession()
+        onSessionExit()
     }
 
     // Start a fresh session when the screen is first displayed

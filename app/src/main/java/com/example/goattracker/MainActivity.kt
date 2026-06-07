@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.goattracker.data.DefaultDataRepository
 import com.example.goattracker.theme.GoatTrackerTheme
 import com.example.goattracker.ui.SplashScreen
+import com.example.goattracker.ui.live.ActiveSessionController
 import com.example.goattracker.ui.live.RestTimerManager
 import com.example.goattracker.ui.live.RestTimerService
 import com.example.goattracker.ui.live.RestTimerState
@@ -54,6 +55,11 @@ class MainActivity : ComponentActivity() {
         if (RestTimerManager.state.value is RestTimerState.Counting) {
             RestTimerService.start(this)
         }
+
+        // Start the app-scoped session controller. Its init observes the persisted draft, so a
+        // session that was in progress when the process was killed resurfaces in the mini-player and
+        // its ongoing notification — symmetric to the timer restore just above.
+        ActiveSessionController.initialize(applicationContext)
 
         // Handle navigation from notification when app is cold-started
         handleNavigationIntent(intent)

@@ -98,3 +98,20 @@ data class WorkoutState(
     // Null when no session is active; cleared on save or discard.
     val activeDraft: WorkoutSession? = null
 )
+
+/**
+ * Turn an in-progress live session into the session to persist on "Terminer", or null when there is
+ * nothing worth saving (no completed set). Drops incomplete sets and exercises with no completed set
+ * so the saved log stays clean, and stamps [now] as the end time.
+ *
+ * Pure and side-effect free so the SAME finish rule is shared by the in-screen ViewModel and the
+ * out-of-screen ActiveSessionController (the notification "Terminer" action) — one transform, so the
+ * two finish paths can never drift apart.
+ */
+fun WorkoutSession.toFinishedOrNull(now: Long): WorkoutSession? {
+    val completedExercises = exercises
+        .map { it.copy(sets = it.sets.filter { set -> set.isCompleted }) }
+        .filter { it.sets.isNotEmpty() }
+    return if (completedExercises.isEmpty()) null
+    else copy(endTime = now, exercises = completedExercises)
+}
