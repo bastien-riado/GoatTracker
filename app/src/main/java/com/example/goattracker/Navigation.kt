@@ -20,6 +20,7 @@ import com.example.goattracker.ui.create.CreateExerciseScreen
 import com.example.goattracker.ui.live.LiveWorkoutScreen
 import com.example.goattracker.ui.profile.ProfileScreen
 import com.example.goattracker.ui.profile.SessionsListScreen
+import com.example.goattracker.ui.bodyheatmap.BodyHeatmapScreen
 import com.example.goattracker.ui.exercise.ExerciseDetailScreen
 
 @Composable
@@ -77,11 +78,15 @@ fun MainNavigation() {
         entry<Profile> {
           ProfileScreen(
             onBackClick = { backStack.removeLastOrNull() },
-            onSessionsClick = { backStack.add(SessionsList) }
+            onSessionsClick = { backStack.add(SessionsList) },
+            onBodyHeatmapClick = { backStack.add(BodyHeatmap) }
           )
         }
         entry<SessionsList> {
           SessionsListScreen(onBackClick = { backStack.removeLastOrNull() })
+        }
+        entry<BodyHeatmap> {
+          BodyHeatmapScreen(onBackClick = { backStack.removeLastOrNull() })
         }
         entry<ExerciseDetail> { key ->
           ExerciseDetailScreen(

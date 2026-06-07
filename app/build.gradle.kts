@@ -15,6 +15,13 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+
+        // SceneView/Filament ship native (.so) libraries per ABI. Restrict to the ABIs that
+        // matter — real devices (arm64-v8a, armeabi-v7a) plus x86_64 for emulator testing — to
+        // keep the APK from ballooning with x86 variants nobody ships on.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
     }
 
     // Release signing reads from local.properties (keys are never committed). Until those keys are
@@ -109,6 +116,9 @@ dependencies {
 
   // Serialization JSON
   implementation(libs.kotlinx.serialization.json)
+
+  // 3D rendering — muscle heatmap body model (SceneView, Filament backend)
+  implementation(libs.sceneview)
 
   // Material Icons Core
   implementation("androidx.compose.material:material-icons-core")

@@ -8,5 +8,6 @@ import kotlinx.serialization.Serializable
 @Serializable data class LiveWorkout(val sessionId: String? = null) : NavKey
 @Serializable data object Profile : NavKey
 @Serializable data object SessionsList : NavKey
+@Serializable data object BodyHeatmap : NavKey
 @Serializable data class ExerciseDetail(val exerciseId: String) : NavKey
 

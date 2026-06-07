@@ -50,6 +50,7 @@ import kotlin.math.sin
 fun ProfileScreen(
     onBackClick: () -> Unit,
     onSessionsClick: () -> Unit,
+    onBodyHeatmapClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -151,6 +152,42 @@ fun ProfileScreen(
                                 color = AccentSecondary,
                                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold)
                             )
+                        }
+                    }
+                }
+            }
+
+            // 1b. 3D muscle heatmap entry point
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SurfaceElevated),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, BorderSoft, RoundedCornerShape(12.dp))
+                        .clickable { onBodyHeatmapClick() }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("RÉCUPÉRATION MUSCULAIRE", color = Muted, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp))
+                            Text("Carte musculaire 3D", color = Fg, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("Tournez le corps pour voir les muscles récupérés", color = Muted, fontSize = 11.sp)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Accent.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Star, contentDescription = null, tint = Accent)
                         }
                     }
                 }

@@ -38,3 +38,13 @@
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }
+
+# ── SceneView / Filament (3D muscle heatmap) ─────────────────────────────────
+# Filament & gltfio resolve classes/methods from native (JNI) code by name. SceneView
+# and Filament ship consumer rules, but these are added defensively so R8 can't strip
+# the native bridge (which would crash only in minified release builds).
+-keep class com.google.android.filament.** { *; }
+-keep class io.github.sceneview.** { *; }
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
