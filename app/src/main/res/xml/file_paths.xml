@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Internal cache dir (context.cacheDir)/updates — where the self-update APK is downloaded.
+         Kept off external storage so no storage permission is needed. -->
+    <cache-path name="updates" path="updates/" />
+</paths>
