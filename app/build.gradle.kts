@@ -54,7 +54,6 @@ android {
             // instead of colliding with it (same applicationId + different signing key = the
             // "package already exists" / INSTALL_FAILED_UPDATE_INCOMPATIBLE the installer reports).
             applicationIdSuffix = ".dev"
-            versionNameSuffix = "-dev"
             resValue("string", "app_name", "GoatTrackerDev")
         }
         release {
