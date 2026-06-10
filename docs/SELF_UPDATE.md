@@ -64,5 +64,14 @@ The build resolves signing from env vars first (CI), then these `local.propertie
 4. Merge another change (heatmap / mini-player) into `master` → CI publishes **v2**.
 5. Reopen the installed app → it detects v2 → tap **Mettre à jour** → system installer.
 
-> Note: `applicationId` is currently `com.example.goattracker` (placeholder). Changing it later also
-> breaks updates (different package identity), so settle it before the first public release.
+## Dev vs prod (side-by-side installs)
+
+The **debug** build uses `applicationId com.example.goattracker.dev` and the name **GoatTrackerDev**
+(`applicationIdSuffix = ".dev"` + a per-build-type `resValue` for `app_name`, with `buildFeatures.resValues = true`).
+The **release** build stays `com.example.goattracker` / **GoatTracker**. They therefore install side by
+side instead of colliding with the *"package already exists" / INSTALL_FAILED_UPDATE_INCOMPATIBLE*
+signature clash (same id, different signing key). The self-update check is **skipped on debuggable
+builds**, so only the prod app self-updates.
+
+> The **release** `applicationId` is the prod identity — changing it later breaks updates (different
+> package), so keep `com.example.goattracker` stable.

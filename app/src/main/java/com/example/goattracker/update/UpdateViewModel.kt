@@ -2,6 +2,7 @@ package com.example.goattracker.update
 
 import android.app.Application
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -37,10 +38,16 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
 
     private var hasChecked = false
 
+    // The debug build (GoatTrackerDev, applicationId …goattracker.dev) is installed via Android
+    // Studio and has a different package identity, so self-updating it with the prod APK is wrong.
+    private val isDebuggableBuild =
+        (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
     /** Silent check; safe to call on every composition (runs at most once per process). */
     fun checkForUpdate() {
         if (hasChecked) return
         hasChecked = true
+        if (isDebuggableBuild) return // dev build doesn't self-update
         viewModelScope.launch {
             val result = repository.checkForUpdate()
             if (result is UpdateCheckResult.Available && result.info.versionCode != snoozedVersion()) {

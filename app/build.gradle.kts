@@ -49,7 +49,16 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Distinct package + name so the dev build installs ALONGSIDE the prod (release) app
+            // instead of colliding with it (same applicationId + different signing key = the
+            // "package already exists" / INSTALL_FAILED_UPDATE_INCOMPATIBLE the installer reports).
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            resValue("string", "app_name", "GoatTrackerDev")
+        }
         release {
+            resValue("string", "app_name", "GoatTracker")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -65,6 +74,7 @@ android {
       aidl = false
       buildConfig = false
       shaders = false
+      resValues = true // per-build-type app_name (GoatTracker / GoatTrackerDev)
     }
 
     packaging {

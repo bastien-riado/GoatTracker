@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">GoatTracker</string>
+    <!-- app_name is provided per build type via resValue in app/build.gradle.kts
+         ("GoatTracker" for release, "GoatTrackerDev" for debug) so the dev and prod
+         apps have distinct launcher names and can be installed side by side. -->
 </resources>
