@@ -28,8 +28,12 @@ enum class MuscleGroup(val id: String, val label: String) {
     CALVES("calves", "Mollets");
 
     companion object {
-        /** The glTF material name that is present in the model but is NOT a muscle (head/neck). */
-        const val NEUTRAL_MATERIAL_ID: String = "head"
+        /**
+         * glTF material names present in the model that are NOT muscles: `head` (head/neck) and
+         * `body` (hands, feet, shins, knees, groin, clavicles and any untracked area). The
+         * renderer tints any material whose name has no [MuscleGroup] as neutral grey.
+         */
+        val NEUTRAL_MATERIAL_IDS: Set<String> = setOf("head", "body")
 
         fun fromId(id: String): MuscleGroup? = entries.firstOrNull { it.id == id }
     }

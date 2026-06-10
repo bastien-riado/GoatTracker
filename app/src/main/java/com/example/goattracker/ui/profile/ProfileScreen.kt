@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.goattracker.data.DefaultDataRepository
 import com.example.goattracker.domain.model.Exercise
+import com.example.goattracker.ui.bodyheatmap.BodyModelAssets
 import com.example.goattracker.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -59,6 +60,10 @@ fun ProfileScreen(
     }
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Warm up the Filament engine + body model bytes while the user is still here, so navigating
+    // to the 3D heatmap is instant (see BodyModelAssets — app-scoped, created once).
+    LaunchedEffect(Unit) { BodyModelAssets.prewarm(context) }
 
     Scaffold(
         topBar = {

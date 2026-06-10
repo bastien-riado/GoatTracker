@@ -34,12 +34,7 @@ import io.github.sceneview.SurfaceType
 import io.github.sceneview.math.Position
 import io.github.sceneview.model.ModelInstance
 import io.github.sceneview.rememberCameraNode
-import io.github.sceneview.rememberEngine
-import io.github.sceneview.rememberModelInstance
-import io.github.sceneview.rememberModelLoader
 import kotlin.math.roundToInt
-
-private const val BODY_MODEL_ASSET = "models/body_muscles.glb"
 
 private fun Rgb.toColor(): Color = Color(r, g, b)
 
@@ -47,7 +42,7 @@ private fun Rgb.toColor(): Color = Color(r, g, b)
  * Tints each muscle of the loaded body model by recovery (color logic lives in [MuscleHeatColor]).
  * The glTF material name equals the [MuscleGroup.id], so we match by
  * [com.google.android.filament.MaterialInstance.getName] and push the color into Filament's
- * `baseColorFactor`. Non-muscle materials (head) stay neutral.
+ * `baseColorFactor`. Non-muscle materials (head, body) stay neutral.
  */
 private fun applyHeatmap(
     instance: ModelInstance,
@@ -75,17 +70,24 @@ fun BodyHeatmapScreen(
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    val engine = rememberEngine()
-    val modelLoader = rememberModelLoader(engine)
+    // Engine + loader + GLB bytes are app-scoped (see BodyModelAssets): opening this screen only
+    // creates a Model from the in-memory buffer, and leaving it never tears the engine down — so
+    // both the enter and the back-navigation stay jank-free.
+    val engine = remember { BodyModelAssets.engine(context) }
+    val modelLoader = remember { BodyModelAssets.modelLoader(context) }
     val cameraNode = rememberCameraNode(engine) {
         position = Position(z = 3.6f) // pulled back to frame the ~1.8 m body
     }
-    val modelInstance = rememberModelInstance(modelLoader, BODY_MODEL_ASSET)
+    val model = remember { BodyModelAssets.createModel(context) }
+    DisposableEffect(model) {
+        // Runs after the Scene's ModelNode destroyed the model entities (reverse composition order).
+        onDispose { BodyModelAssets.destroyModel(model) }
+    }
+    val modelInstance: ModelInstance = model.instance
 
-    // Re-tint whenever the model finishes loading or the recovery data / selection changes.
+    // Re-tint whenever the recovery data / selection changes.
     LaunchedEffect(modelInstance, state.statuses, state.selected) {
-        val inst = modelInstance ?: return@LaunchedEffect
-        applyHeatmap(inst, state.statuses, state.selected)
+        applyHeatmap(modelInstance, state.statuses, state.selected)
     }
 
     Scaffold(
@@ -132,12 +134,10 @@ fun BodyHeatmapScreen(
                 cameraNode = cameraNode,
                 // The default cameraManipulator provides 360° orbit + pinch-to-zoom.
             ) {
-                modelInstance?.let { instance ->
-                    ModelNode(modelInstance = instance, scaleToUnits = 1.8f)
-                }
+                ModelNode(modelInstance = modelInstance, scaleToUnits = 1.8f)
             }
 
-            if (state.isLoading || modelInstance == null) {
+            if (state.isLoading) {
                 CircularProgressIndicator(
                     color = Accent,
                     modifier = Modifier.align(Alignment.Center),
