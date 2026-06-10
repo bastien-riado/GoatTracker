@@ -35,7 +35,6 @@ import com.example.goattracker.R
 import com.example.goattracker.theme.Bg
 import com.example.goattracker.theme.Meta
 import com.example.goattracker.theme.PremiumGradient
-import com.example.goattracker.ui.components.rememberAppVersionLabel
 import androidx.compose.material3.Text
 
 /**
@@ -100,33 +99,19 @@ fun SplashScreen(modifier: Modifier = Modifier) {
             )
         }
 
-        // Discreet attribution + build identity (channel + version), kept low and unobtrusive.
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
+        // Discreet attribution, kept low and unobtrusive at the bottom of the screen.
+        Text(
+            text = "Powered by DrPixel",
+            color = Meta,
+            fontSize = 10.sp,
+            letterSpacing = 0.5.sp,
+            fontWeight = FontWeight.Normal,
+            textAlign = TextAlign.Center,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp)
                 .alpha(0.6f * enter.value),
-        ) {
-            Text(
-                text = "Powered by DrPixel",
-                color = Meta,
-                fontSize = 10.sp,
-                letterSpacing = 0.5.sp,
-                fontWeight = FontWeight.Normal,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                // e.g. "dev 1.0-dev (1)" vs "release 1.0.1 (2)" — tells the two installs apart.
-                text = rememberAppVersionLabel(),
-                color = Meta,
-                fontSize = 9.sp,
-                letterSpacing = 0.5.sp,
-                fontWeight = FontWeight.Normal,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
+        )
     }
 }

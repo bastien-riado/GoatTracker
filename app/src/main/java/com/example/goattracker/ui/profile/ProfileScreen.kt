@@ -39,6 +39,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.goattracker.data.DefaultDataRepository
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.theme.*
+import com.example.goattracker.ui.components.rememberAppVersionLabel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -354,6 +355,19 @@ fun ProfileScreen(
                         }
                     }
                 }
+            }
+
+            // App build identity (channel + version) — persistent footer to tell dev/prod apart.
+            item {
+                Text(
+                    text = rememberAppVersionLabel(),
+                    color = Muted,
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 8.dp),
+                )
             }
         }
     }
