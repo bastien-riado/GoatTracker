@@ -13,8 +13,12 @@ android {
         applicationId = "com.example.goattracker"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        // versionCode/versionName are CI-driven: the release pipeline passes -PVERSION_CODE
+        // (monotonic, e.g. the GitHub Actions run number) and -PVERSION_NAME. Local/dev builds
+        // fall back to 1 / "1.0". The self-update check compares versionCode, so it MUST increase
+        // on every published release or Android refuses the install ("version downgrade").
+        versionCode = providers.gradleProperty("VERSION_CODE").orNull?.toIntOrNull() ?: 1
+        versionName = providers.gradleProperty("VERSION_NAME").orNull ?: "1.0"
 
         // SceneView/Filament ship native (.so) libraries per ABI. Restrict to the ABIs that
         // matter — real devices (arm64-v8a, armeabi-v7a) plus x86_64 for emulator testing — to
@@ -24,28 +28,43 @@ android {
         }
     }
 
-    // Release signing reads from local.properties (keys are never committed). Until those keys are
-    // configured the release build is produced UNSIGNED — R8/minify still runs, so the build stays
-    // verifiable on CI/dev; a release machine supplies the real keystore.
+    // Release signing resolves from ENV first (CI sets KEYSTORE_FILE/KEYSTORE_PASSWORD/KEY_ALIAS/
+    // KEY_PASSWORD after decoding the keystore secret), then falls back to local.properties RELEASE_*
+    // keys for local dev. Secrets are never committed. Until either source is present the release
+    // build is produced UNSIGNED — R8/minify still runs so the build stays verifiable.
+    // NOTE: self-update REQUIRES every published release to be signed with the SAME keystore, else
+    // Android rejects the install with INSTALL_FAILED_UPDATE_INCOMPATIBLE (signature mismatch).
     val keystoreProps = Properties().apply {
         val f = rootProject.file("local.properties")
         if (f.exists()) f.inputStream().use { load(it) }
     }
-    val hasReleaseSigning = keystoreProps.getProperty("RELEASE_STORE_FILE") != null
+    fun signingValue(envKey: String, propKey: String): String? =
+        System.getenv(envKey) ?: keystoreProps.getProperty(propKey)
+
+    val storeFilePath = signingValue("KEYSTORE_FILE", "RELEASE_STORE_FILE")
+    val hasReleaseSigning = storeFilePath != null
 
     signingConfigs {
         create("release") {
             if (hasReleaseSigning) {
-                storeFile = file(keystoreProps.getProperty("RELEASE_STORE_FILE"))
-                storePassword = keystoreProps.getProperty("RELEASE_STORE_PASSWORD")
-                keyAlias = keystoreProps.getProperty("RELEASE_KEY_ALIAS")
-                keyPassword = keystoreProps.getProperty("RELEASE_KEY_PASSWORD")
+                storeFile = file(storeFilePath!!)
+                storePassword = signingValue("KEYSTORE_PASSWORD", "RELEASE_STORE_PASSWORD")
+                keyAlias = signingValue("KEY_ALIAS", "RELEASE_KEY_ALIAS")
+                keyPassword = signingValue("KEY_PASSWORD", "RELEASE_KEY_PASSWORD")
             }
         }
     }
 
     buildTypes {
+        debug {
+            // Distinct package + name so the dev build installs ALONGSIDE the prod (release) app
+            // instead of colliding with it (same applicationId + different signing key = the
+            // "package already exists" / INSTALL_FAILED_UPDATE_INCOMPATIBLE the installer reports).
+            applicationIdSuffix = ".dev"
+            resValue("string", "app_name", "GoatTrackerDev")
+        }
         release {
+            resValue("string", "app_name", "GoatTracker")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -61,6 +80,7 @@ android {
       aidl = false
       buildConfig = false
       shaders = false
+      resValues = true // per-build-type app_name (GoatTracker / GoatTrackerDev)
     }
 
     packaging {
@@ -102,6 +122,7 @@ dependencies {
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation(libs.okhttp.mockwebserver)
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)
@@ -119,6 +140,9 @@ dependencies {
 
   // 3D rendering — muscle heatmap body model (SceneView, Filament backend)
   implementation(libs.sceneview)
+
+  // HTTP client for the in-app self-update check + APK download
+  implementation(libs.okhttp)
 
   // Material Icons Core
   implementation("androidx.compose.material:material-icons-core")

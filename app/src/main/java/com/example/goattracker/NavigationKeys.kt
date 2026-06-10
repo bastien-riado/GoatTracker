@@ -10,4 +10,6 @@ import kotlinx.serialization.Serializable
 @Serializable data object SessionsList : NavKey
 @Serializable data object BodyHeatmap : NavKey
 @Serializable data class ExerciseDetail(val exerciseId: String) : NavKey
+@Serializable data object Settings : NavKey
+@Serializable data object PatchNotes : NavKey
 
