@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.goattracker.ui.components.isDevBuild
 
 /**
  * Drop-in entry point for the self-update feature. Render once near the top of the Activity's content;
@@ -28,6 +29,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @Composable
 fun UpdateGate() {
     val context = LocalContext.current
+    // Self-update is a prod-channel concept: the dev app (GoatTrackerDev) runs whatever the IDE
+    // deploys, so never check/prompt there (the release it would find is the prod APK).
+    if (isDevBuild(context)) return
     val vm: UpdateViewModel = viewModel()
     val state by vm.uiState.collectAsStateWithLifecycle()
     val installer = remember { ApkInstaller(context) }

@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.goattracker.theme.*
+import com.example.goattracker.ui.components.isDevBuild
 import com.example.goattracker.ui.components.rememberAppVersionLabel
 import com.example.goattracker.update.ManualCheckState
 import com.example.goattracker.update.UpdateViewModel
@@ -116,23 +117,26 @@ fun SettingsScreen(
                 }
             }
 
-            // Vérifier les mises à jour (manual check; reuses the shared update dialog if newer)
-            SettingsRow(
-                icon = Icons.Default.Refresh,
-                label = "Vérifier les mises à jour",
-                onClick = { updateVm.checkForUpdate(force = true) },
-                trailing = {
-                    when (manualState) {
-                        ManualCheckState.Checking ->
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Accent)
-                        ManualCheckState.UpToDate ->
-                            Text("À jour", color = Muted, style = MaterialTheme.typography.bodySmall)
-                        ManualCheckState.Failed ->
-                            Text("Hors-ligne ?", color = Muted, style = MaterialTheme.typography.bodySmall)
-                        ManualCheckState.Idle -> Unit
-                    }
-                },
-            )
+            // Vérifier les mises à jour (manual check; reuses the shared update dialog if newer).
+            // Hidden on the dev build: updates/CI are a prod-channel concept (see isDevBuild).
+            if (!isDevBuild(activity)) {
+                SettingsRow(
+                    icon = Icons.Default.Refresh,
+                    label = "Vérifier les mises à jour",
+                    onClick = { updateVm.checkForUpdate(force = true) },
+                    trailing = {
+                        when (manualState) {
+                            ManualCheckState.Checking ->
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Accent)
+                            ManualCheckState.UpToDate ->
+                                Text("À jour", color = Muted, style = MaterialTheme.typography.bodySmall)
+                            ManualCheckState.Failed ->
+                                Text("Hors-ligne ?", color = Muted, style = MaterialTheme.typography.bodySmall)
+                            ManualCheckState.Idle -> Unit
+                        }
+                    },
+                )
+            }
 
             // Notes de version (dedicated page)
             SettingsRow(

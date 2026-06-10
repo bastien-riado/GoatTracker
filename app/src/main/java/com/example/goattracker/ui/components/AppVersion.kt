@@ -21,6 +21,14 @@ fun appVersionLabel(context: Context): String {
     return "$channel-$versionName"
 }
 
+/**
+ * `true` on the dev install (GoatTrackerDev, debuggable / `.dev` suffix). The self-update + CI
+ * release concept only applies to the prod channel: dev builds always run whatever Android Studio
+ * deploys, so the update check is skipped entirely for them (a "new version available" dialog on
+ * the dev app would be misleading — it points at the prod APK).
+ */
+fun isDevBuild(context: Context): Boolean = isDebuggable(context)
+
 private fun isDebuggable(context: Context): Boolean =
     (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
