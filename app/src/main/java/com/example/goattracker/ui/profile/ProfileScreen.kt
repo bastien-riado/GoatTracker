@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -39,7 +40,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.goattracker.data.DefaultDataRepository
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.theme.*
-import com.example.goattracker.ui.components.rememberAppVersionLabel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -51,6 +51,7 @@ import kotlin.math.sin
 fun ProfileScreen(
     onBackClick: () -> Unit,
     onSessionsClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -83,6 +84,23 @@ fun ProfileScreen(
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Back",
+                            tint = Fg
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = onSettingsClick,
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(SurfaceElevated)
+                            .border(1.dp, Border, CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Paramètres",
                             tint = Fg
                         )
                     }
@@ -355,19 +373,6 @@ fun ProfileScreen(
                         }
                     }
                 }
-            }
-
-            // App build identity (channel + version) — persistent footer to tell dev/prod apart.
-            item {
-                Text(
-                    text = rememberAppVersionLabel(),
-                    color = Muted,
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp, bottom = 8.dp),
-                )
             }
         }
     }

@@ -21,6 +21,8 @@ import com.example.goattracker.ui.live.LiveWorkoutScreen
 import com.example.goattracker.ui.profile.ProfileScreen
 import com.example.goattracker.ui.profile.SessionsListScreen
 import com.example.goattracker.ui.exercise.ExerciseDetailScreen
+import com.example.goattracker.ui.settings.SettingsScreen
+import com.example.goattracker.ui.settings.PatchNotesScreen
 
 @Composable
 fun MainNavigation() {
@@ -77,7 +79,8 @@ fun MainNavigation() {
         entry<Profile> {
           ProfileScreen(
             onBackClick = { backStack.removeLastOrNull() },
-            onSessionsClick = { backStack.add(SessionsList) }
+            onSessionsClick = { backStack.add(SessionsList) },
+            onSettingsClick = { backStack.add(Settings) }
           )
         }
         entry<SessionsList> {
@@ -89,6 +92,15 @@ fun MainNavigation() {
             onBackClick = { backStack.removeLastOrNull() },
             onEditClick = { backStack.add(CreateExercise(key.exerciseId)) }
           )
+        }
+        entry<Settings> {
+          SettingsScreen(
+            onBackClick = { backStack.removeLastOrNull() },
+            onPatchNotesClick = { backStack.add(PatchNotes) }
+          )
+        }
+        entry<PatchNotes> {
+          PatchNotesScreen(onBackClick = { backStack.removeLastOrNull() })
         }
       },
   )

@@ -20,10 +20,14 @@ sealed interface UpdateUiState {
     data class ReadyToInstall(val apk: File, val info: ReleaseInfo) : UpdateUiState
 }
 
+/** Outcome of a user-triggered check (the silent startup check uses [UpdateUiState] only). */
+enum class ManualCheckState { Idle, Checking, UpToDate, Failed }
+
 /**
- * Owns the update flow for the lifetime of the Activity. Reads its own versionCode from the
- * PackageManager (the module has buildConfig disabled), checks once per process, and stays completely
- * silent on "up to date" or any failure — only a genuinely-newer, non-snoozed version surfaces a dialog.
+ * Owns the update flow for the lifetime of the Activity. It is resolved against the Activity's
+ * ViewModelStore (UpdateGate at the top level, Settings via the activity owner) so a manual check from
+ * Settings drives the same dialog. Reads its own versionCode from the PackageManager (buildConfig is
+ * disabled). The silent check is once-per-process and skipped on debug; everything fails silently.
  */
 class UpdateViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -36,25 +40,63 @@ class UpdateViewModel(app: Application) : AndroidViewModel(app) {
     private val _uiState = MutableStateFlow<UpdateUiState>(UpdateUiState.Idle)
     val uiState: StateFlow<UpdateUiState> = _uiState.asStateFlow()
 
-    private var hasChecked = false
+    /** Latest release metadata (for the patch-notes screen); populated by any successful check. */
+    private val _latestRelease = MutableStateFlow<ReleaseInfo?>(null)
+    val latestRelease: StateFlow<ReleaseInfo?> = _latestRelease.asStateFlow()
 
-    // The debug build (GoatTrackerDev, applicationId …goattracker.dev) is installed via Android
-    // Studio and has a different package identity, so self-updating it with the prod APK is wrong.
+    private val _manualCheckState = MutableStateFlow(ManualCheckState.Idle)
+    val manualCheckState: StateFlow<ManualCheckState> = _manualCheckState.asStateFlow()
+
     private val isDebuggableBuild =
         (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    private var hasChecked = false
 
-    /** Silent check; safe to call on every composition (runs at most once per process). */
-    fun checkForUpdate() {
-        if (hasChecked) return
-        hasChecked = true
-        if (isDebuggableBuild) return // dev build doesn't self-update
-        viewModelScope.launch {
-            val result = repository.checkForUpdate()
-            if (result is UpdateCheckResult.Available && result.info.versionCode != snoozedVersion()) {
-                _uiState.value = UpdateUiState.Available(result.info)
-            }
-            // UpToDate / Failed / snoozed -> stay Idle, no UI (offline must be invisible).
+    /**
+     * @param force a user-initiated check (Settings button): runs even on debug builds and even for a
+     *   snoozed version, and reports the result via [manualCheckState]. The silent startup check
+     *   (force=false) runs at most once per process and is skipped on debuggable builds.
+     */
+    fun checkForUpdate(force: Boolean = false) {
+        if (!force) {
+            if (hasChecked) return
+            hasChecked = true
+            if (isDebuggableBuild) return
         }
+        viewModelScope.launch {
+            if (force) _manualCheckState.value = ManualCheckState.Checking
+            when (val result = repository.checkForUpdate()) {
+                is UpdateCheckResult.Available -> {
+                    _latestRelease.value = result.info
+                    if (force || result.info.versionCode != snoozedVersion()) {
+                        _uiState.value = UpdateUiState.Available(result.info)
+                    }
+                    if (force) _manualCheckState.value = ManualCheckState.Idle
+                }
+                is UpdateCheckResult.UpToDate -> {
+                    _latestRelease.value = result.info
+                    if (force) _manualCheckState.value = ManualCheckState.UpToDate
+                }
+                is UpdateCheckResult.Failed -> {
+                    if (force) _manualCheckState.value = ManualCheckState.Failed
+                }
+            }
+        }
+    }
+
+    /** Loads latest release metadata for display (patch notes) WITHOUT surfacing the update dialog. */
+    fun loadReleaseNotesIfNeeded() {
+        if (_latestRelease.value != null) return
+        viewModelScope.launch {
+            when (val result = repository.checkForUpdate()) {
+                is UpdateCheckResult.Available -> _latestRelease.value = result.info
+                is UpdateCheckResult.UpToDate -> _latestRelease.value = result.info
+                is UpdateCheckResult.Failed -> Unit
+            }
+        }
+    }
+
+    fun resetManualCheckState() {
+        _manualCheckState.value = ManualCheckState.Idle
     }
 
     /** "Plus tard": remember this version so it won't nag again, but a NEWER one still will. */

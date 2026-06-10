@@ -63,12 +63,14 @@ jobs:
           VERSION_CODE=${{ github.run_number }}
           VERSION_NAME=1.0.${{ github.run_number }}
           APK_URL=https://github.com/${{ github.repository }}/releases/latest/download/goattracker-release.apk
+          # Patch notes shown in-app: commit message minus the Co-Authored-By trailer.
+          NOTES_CLEAN="$(printf '%s\n' "${NOTES:-$VERSION_NAME}" | sed '/^[Cc]o-[Aa]uthored-[Bb]y:/d')"
           jq -n \
             --argjson versionCode "$VERSION_CODE" \
             --arg versionName "$VERSION_NAME" \
             --arg apkUrl "$APK_URL" \
             --arg sha256 "$SHA256" \
-            --arg notes "${NOTES:-$VERSION_NAME}" \
+            --arg notes "$NOTES_CLEAN" \
             '{versionCode:$versionCode, versionName:$versionName, apkUrl:$apkUrl, sha256:$sha256, notes:$notes}' \
             > version.json
           echo "Generated version.json:"; cat version.json

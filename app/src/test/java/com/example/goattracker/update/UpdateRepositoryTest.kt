@@ -49,13 +49,13 @@ class UpdateRepositoryTest {
     @Test
     fun `up to date when versionCode equal`() = runTest {
         server.enqueue(MockResponse().setBody(metadata(3)))
-        assertEquals(UpdateCheckResult.UpToDate, repo(3).checkForUpdate())
+        assertTrue(repo(3).checkForUpdate() is UpdateCheckResult.UpToDate)
     }
 
     @Test
     fun `up to date when remote is older`() = runTest {
         server.enqueue(MockResponse().setBody(metadata(2)))
-        assertEquals(UpdateCheckResult.UpToDate, repo(3).checkForUpdate())
+        assertTrue(repo(3).checkForUpdate() is UpdateCheckResult.UpToDate)
     }
 
     @Test

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -75,16 +74,7 @@ private fun UpdateDialog(
         is UpdateUiState.Available -> AlertDialog(
             onDismissRequest = onDismiss,
             title = { Text("Mise à jour disponible") },
-            text = {
-                Column {
-                    Text("La version ${state.info.versionName} est disponible.")
-                    val notes = state.info.notes
-                    if (!notes.isNullOrBlank()) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(notes, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            },
+            text = { Text("La version ${state.info.versionName} est disponible.") },
             confirmButton = { TextButton(onClick = onUpdate) { Text("Mettre à jour") } },
             dismissButton = { TextButton(onClick = onDismiss) { Text("Plus tard") } },
         )

@@ -14,7 +14,7 @@ import kotlin.coroutines.coroutineContext
 
 /** Outcome of a silent update check. Failures are returned, never thrown, so the caller can stay quiet. */
 sealed interface UpdateCheckResult {
-    data object UpToDate : UpdateCheckResult
+    data class UpToDate(val info: ReleaseInfo) : UpdateCheckResult
     data class Available(val info: ReleaseInfo) : UpdateCheckResult
     data class Failed(val cause: Throwable) : UpdateCheckResult
 }
@@ -47,7 +47,7 @@ class UpdateRepository(
         }.fold(
             onSuccess = { info ->
                 if (info.versionCode > currentVersionCode) UpdateCheckResult.Available(info)
-                else UpdateCheckResult.UpToDate
+                else UpdateCheckResult.UpToDate(info)
             },
             onFailure = { UpdateCheckResult.Failed(it) },
         )
