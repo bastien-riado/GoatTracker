@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -58,7 +59,6 @@ private fun applyHeatmap(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BodyHeatmapScreen(
     onBackClick: () -> Unit,
@@ -90,75 +90,82 @@ fun BodyHeatmapScreen(
         applyHeatmap(modelInstance, state.statuses, state.selected)
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Carte musculaire 3D",
-                        color = Fg,
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    )
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onBackClick,
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(SurfaceElevated)
-                            .border(1.dp, Border, CircleShape),
-                    ) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Retour", tint = Fg)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface, titleContentColor = Fg),
-            )
-        },
-        containerColor = Bg,
-    ) { innerPadding ->
-        Box(
-            modifier = modifier
+    // Immersive edge-to-edge layout: no header, content draws behind the (transparent) status and
+    // navigation bars; the back button, legend and chips float over the black scene.
+    val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val navBarPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black),
+    ) {
+        Scene(
+            // The scene viewport is padded down to the unobstructed middle of the screen (between
+            // the top legend row and the bottom chips), so the auto-centered model lands visually
+            // centered between the overlays. The viewport bounds stay invisible: the scene clear
+            // color and the screen background are both black.
+            modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(top = statusBarPadding + 60.dp, bottom = navBarPadding + 72.dp),
+            // TextureSurface composites inline with the Compose tree, so the 3D view is removed
+            // in lockstep with this screen instead of a SurfaceView lingering ~300ms over the
+            // Profile page after back-navigation.
+            surfaceType = SurfaceType.TextureSurface,
+            engine = engine,
+            modelLoader = modelLoader,
+            cameraNode = cameraNode,
+            // The default cameraManipulator provides 360° orbit + pinch-to-zoom.
         ) {
-            Scene(
-                modifier = Modifier.fillMaxSize(),
-                // TextureSurface composites inline with the Compose tree, so the 3D view is removed
-                // in lockstep with this screen instead of a SurfaceView lingering ~300ms over the
-                // Profile page after back-navigation.
-                surfaceType = SurfaceType.TextureSurface,
-                engine = engine,
-                modelLoader = modelLoader,
-                cameraNode = cameraNode,
-                // The default cameraManipulator provides 360° orbit + pinch-to-zoom.
-            ) {
-                ModelNode(modelInstance = modelInstance, scaleToUnits = 1.8f)
-            }
+            ModelNode(modelInstance = modelInstance, scaleToUnits = 1.8f)
+        }
 
-            if (state.isLoading) {
-                CircularProgressIndicator(
-                    color = Accent,
-                    modifier = Modifier.align(Alignment.Center),
-                )
-            }
+        if (state.isLoading) {
+            CircularProgressIndicator(
+                color = Accent,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
 
-            Column(
+        // Floating back button (same circle style as the other screens' nav icon, plus a shadow
+        // so it reads as floating over the scene) with the legend beside it.
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            IconButton(
+                onClick = onBackClick,
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .size(40.dp)
+                    .shadow(10.dp, CircleShape)
+                    .clip(CircleShape)
+                    .background(SurfaceElevated)
+                    .border(1.dp, Border, CircleShape),
             ) {
-                SelectedMuscleReadout(state)
-                HeatLegend()
-                MuscleChipsRow(
-                    statuses = state.statuses,
-                    selected = state.selected,
-                    onSelect = viewModel::select,
-                )
+                Icon(Icons.Default.ArrowBack, contentDescription = "Retour", tint = Fg)
             }
+            HeatLegend(modifier = Modifier.weight(1f))
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SelectedMuscleReadout(state)
+            MuscleChipsRow(
+                statuses = state.statuses,
+                selected = state.selected,
+                onSelect = viewModel::select,
+            )
         }
     }
 }
@@ -188,8 +195,8 @@ private fun SelectedMuscleReadout(state: BodyHeatmapUiState) {
 }
 
 @Composable
-private fun HeatLegend() {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+private fun HeatLegend(modifier: Modifier = Modifier) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
