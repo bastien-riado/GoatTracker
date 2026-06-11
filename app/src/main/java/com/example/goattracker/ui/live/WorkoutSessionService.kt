@@ -19,16 +19,25 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 
 /**
  * Keeps the live session visible OUTSIDE the app as an ongoing notification — the Android analog of
- * Deezer's "now playing" bar (and, where the OS supports it, of an iOS Live Activity / Dynamic
- * Island; see [promoteToLiveUpdate]). It mirrors [RestTimerService]: a short foreground service that
- * observes a single source of truth ([ActiveSessionController.session]) and self-stops the moment the
- * session ends. Elapsed time is rendered by the system's native chronometer, so the notification
- * stays accurate with the screen off and across Doze without us pushing per-second updates.
+ * Deezer's "now playing" presence. It mirrors [RestTimerService]: a foreground service that observes
+ * the app-scoped sources of truth ([ActiveSessionController.session] + [RestTimerManager.state]) and
+ * self-stops the moment the session ends.
+ *
+ * On Android 16+ (API 36) the notification opts into **Live Updates** — the status-bar chip that
+ * expands on tap (the platform's Dynamic-Island analog): [NotificationCompat.ProgressStyle] renders
+ * the planned/completed sets as segments, `setShortCriticalText` feeds the chip label, and
+ * `setRequestPromotedOngoing` requests the promoted treatment. This is the OEM-neutral path (AOSP /
+ * Pixel chip, Samsung Now Bar, OxygenOS Live Alerts all consume promoted ongoing notifications);
+ * on older or non-supporting devices the exact same notification simply shows as a regular ongoing
+ * one with the native count-up chronometer, so nothing is lost.
  */
 class WorkoutSessionService : Service() {
 
@@ -37,7 +46,11 @@ class WorkoutSessionService : Service() {
 
     companion object {
         private const val FOREGROUND_NOTIFICATION_ID = 1003
-        const val CHANNEL_ID = "workout_session_channel"
+        // v2: importance LOW -> DEFAULT (still silent). Promoted "Live Update" treatment on some
+        // OEMs is gated on non-minimal importance; channel settings are immutable after creation,
+        // hence the new id.
+        const val CHANNEL_ID = "workout_session_channel_v2"
+        private const val ACCENT = 0xFFFF3366.toInt()
 
         fun start(context: Context) {
             val intent = Intent(context, WorkoutSessionService::class.java)
@@ -55,14 +68,15 @@ class WorkoutSessionService : Service() {
         fun ensureChannel(context: Context) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.deleteNotificationChannel("workout_session_channel")
             if (nm.getNotificationChannel(CHANNEL_ID) == null) {
                 nm.createNotificationChannel(
                     NotificationChannel(
                         CHANNEL_ID,
                         "Séance en cours",
-                        // LOW: ongoing and silent — it must never buzz; the rest-timer alert channel
-                        // owns the "it's time for your next set" interruption.
-                        NotificationManager.IMPORTANCE_LOW,
+                        // DEFAULT importance for Live-Update eligibility, but silent: it must never
+                        // buzz — the rest-timer alert channel owns the "next set" interruption.
+                        NotificationManager.IMPORTANCE_DEFAULT,
                     ).apply {
                         description = "Affiche la séance d'entraînement en cours"
                         enableVibration(false)
@@ -84,7 +98,7 @@ class WorkoutSessionService : Service() {
         // startForeground must be called promptly. Build from whatever the controller already holds;
         // if there is somehow no session, leave foreground and stop immediately.
         val initial = controller.session.value
-        startInForeground(buildNotification(initial))
+        startInForeground(buildNotification(initial, RestTimerManager.state.value))
         if (initial == null) {
             stopSelf()
             return START_NOT_STICKY
@@ -92,16 +106,19 @@ class WorkoutSessionService : Service() {
 
         observeJob?.cancel()
         observeJob = serviceScope.launch {
-            // collectLatest: a fresh session object (any edit re-emits the draft) replaces the
-            // notification content; a null means the session ended -> tear the service down.
-            controller.session.collectLatest { session ->
-                if (session == null) {
-                    stopSelf()
-                } else {
-                    val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-                    nm.notify(FOREGROUND_NOTIFICATION_ID, buildNotification(session))
+            // Re-render on: any draft edit, any rest-timer transition (start/finish/skip), and a
+            // 1-minute heartbeat that keeps the Live-Update chip's elapsed text fresh (the expanded
+            // card's seconds are rendered natively by the system chronometer, not by us).
+            val minuteTicker = flow { while (true) { emit(Unit); delay(60_000L) } }
+            combine(controller.session, RestTimerManager.state, minuteTicker) { s, rest, _ -> s to rest }
+                .collectLatest { (session, rest) ->
+                    if (session == null) {
+                        stopSelf()
+                    } else {
+                        val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                        nm.notify(FOREGROUND_NOTIFICATION_ID, buildNotification(session, rest))
+                    }
                 }
-            }
         }
 
         return START_NOT_STICKY
@@ -128,7 +145,7 @@ class WorkoutSessionService : Service() {
         }
     }
 
-    private fun buildNotification(session: WorkoutSession?): Notification {
+    private fun buildNotification(session: WorkoutSession?, rest: RestTimerState): Notification {
         // Tap → open the app on the live workout screen (reuses the existing deep-link plumbing in
         // MainActivity / MainNavigation, the same one the rest-timer notification uses).
         val openIntent = Intent(this, MainActivity::class.java).apply {
@@ -150,31 +167,78 @@ class WorkoutSessionService : Service() {
         )
 
         val completedSets = session?.exercises?.sumOf { ex -> ex.sets.count { it.isCompleted } } ?: 0
+        val plannedSets = session?.exercises?.sumOf { it.sets.size } ?: 0
         val completedExercises = session?.exercises?.count { ex -> ex.sets.any { it.isCompleted } } ?: 0
         val startTime = session?.startTime ?: System.currentTimeMillis()
+
+        val contentText = when (rest) {
+            is RestTimerState.Counting -> "Repos en cours • $completedSets série${plural(completedSets)}"
+            is RestTimerState.Finished -> "Repos terminé — prochaine série !"
+            is RestTimerState.Idle ->
+                "$completedExercises exercice${plural(completedExercises)} • $completedSets série${plural(completedSets)}"
+        }
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(session?.name ?: "Séance en cours")
-            .setContentText("$completedExercises exercice(s) • $completedSets série(s)")
+            .setContentText(contentText)
             // Native count-UP chronometer from the session start: real-time on the lock screen,
             // no per-second wakeups from us.
             .setWhen(startTime)
             .setUsesChronometer(true)
             .setShowWhen(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_WORKOUT)
+            .setColor(ACCENT)
             .setContentIntent(openPendingIntent)
             .setOngoing(true)
             .setSilent(true)
             // Android 16+ "Live Updates": ask the system to promote this ongoing notification to a
-            // status-bar chip / prominent lock-screen treatment — the closest platform analog to an
-            // iOS Live Activity / Dynamic Island. Version-safe: on older platforms (and OEMs without
-            // the treatment) it is just an ignored extra, so the ordinary ongoing notification stands.
+            // status-bar chip / prominent lock-screen treatment. Version-safe: a plain extra that
+            // older platforms (and OEMs without the treatment) simply ignore.
             .setRequestPromotedOngoing(true)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Terminer", finishPendingIntent)
 
+        // While a rest is running (or buzzing), surface the skip control out-of-app too. Same
+        // receiver/action as the rest notification's "Passer": stops vibration + countdown service
+        // and returns the timer to Idle, which re-renders this notification via the combine above.
+        if (rest !is RestTimerState.Idle) {
+            val skipRestIntent = Intent(this, RestTimerReceiver::class.java).apply {
+                action = RestTimerManager.ACTION_CANCEL
+            }
+            val skipRestPendingIntent = PendingIntent.getBroadcast(
+                this, 1, skipRestIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            builder.addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "Passer le repos",
+                skipRestPendingIntent,
+            )
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            // Chip label when the status bar promotes us (kept short per platform guidance).
+            val elapsedMin = ((System.currentTimeMillis() - startTime) / 60_000L).toInt().coerceAtLeast(0)
+            builder.setShortCriticalText(
+                if (elapsedMin < 60) "${elapsedMin}min" else "${elapsedMin / 60}h${"%02d".format(elapsedMin % 60)}"
+            )
+            // One segment per planned set, filled up to the completed count — the workout's progress
+            // bar in the chip's expanded card. Styles only when there is something to show.
+            if (plannedSets > 0) {
+                builder.setStyle(
+                    NotificationCompat.ProgressStyle()
+                        .setProgressSegments(List(plannedSets) {
+                            NotificationCompat.ProgressStyle.Segment(1).setColor(ACCENT)
+                        })
+                        .setProgress(completedSets)
+                )
+            }
+        }
+
         return builder.build()
     }
+
+    private fun plural(count: Int) = if (count > 1) "s" else ""
 }

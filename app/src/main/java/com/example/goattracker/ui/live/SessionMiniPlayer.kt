@@ -1,41 +1,57 @@
 package com.example.goattracker.ui.live
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.goattracker.theme.Accent
-import com.example.goattracker.theme.AccentSecondary
 import com.example.goattracker.theme.Border
-import com.example.goattracker.theme.Danger
 import com.example.goattracker.theme.Fg
-import com.example.goattracker.theme.Muted
-import com.example.goattracker.theme.SurfaceElevated
+import com.example.goattracker.theme.PremiumGradient
 
 /**
- * Persistent, docked mini-player for the active session — the Deezer-style "réduit" bar. Tapping it
- * anywhere re-opens the full live screen; while a rest is running it surfaces the countdown and a
- * "Passer" control. Stateless: it renders a [MiniSessionState] and forwards intent through [onOpen]
- * and [onAction], so new controls are a button + a [SessionAction] branch, nothing more.
+ * Persistent mini-player for the active session, skinned EXACTLY like the home "Démarrer une
+ * séance" button (56dp gradient pill, 12dp corners, thin border). It is rendered ONCE, at the
+ * navigation root, so it visually persists across every screen change — the Deezer bar feel.
+ *
+ * One line, three zones: play icon pinned left, chrono + a small "Séance en cours" hint in the
+ * middle, chevron pinned right. While a rest runs the middle swaps to "Repos mm:ss" and the chevron
+ * to a "Passer" control, with a small vertical slide inside the pill (keyed on the BOOLEAN so the
+ * per-second countdown recomposes the text without replaying the slide).
  */
 @Composable
 fun SessionMiniPlayer(
@@ -44,64 +60,142 @@ fun SessionMiniPlayer(
     onAction: (SessionAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val restRemaining = state.restRemainingSeconds
-    val isResting = restRemaining != null
-    val accent = if (state.isRestVibrating) Danger else if (isResting) AccentSecondary else Accent
-
-    Row(
+    Button(
+        onClick = onOpen,
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-            .background(SurfaceElevated)
-            .border(
-                width = 1.dp,
-                color = if (isResting) accent.copy(alpha = 0.6f) else Border,
-                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-            )
-            .clickable(onClickLabel = "Ouvrir la séance") { onOpen() }
-            .semantics { contentDescription = "Séance en cours, appuyez pour rouvrir" }
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .height(56.dp)
+            .border(1.dp, Border, RoundedCornerShape(12.dp))
+            .semantics { contentDescription = "Séance en cours, appuyez pour rouvrir" },
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+        contentPadding = PaddingValues(0.dp),
+        shape = RoundedCornerShape(12.dp)
     ) {
-        // Live indicator
         Box(
             modifier = Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(accent),
-        )
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = state.name,
-                color = Fg,
-                maxLines = 1,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-            )
-            val subtitle = if (restRemaining != null) {
-                "Repos ${formatClock(restRemaining)} • ${formatClock(state.elapsedSeconds)}"
-            } else {
-                "${formatClock(state.elapsedSeconds)} • ${state.completedExercises} ex • ${state.completedSets} séries"
-            }
-            Text(
-                text = subtitle,
-                color = if (state.isRestVibrating) Danger else Muted,
-                maxLines = 1,
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-            )
-        }
-
-        if (isResting) {
-            Text(
-                text = "Passer",
-                color = accent,
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                .fillMaxSize()
+                .background(PremiumGradient)
+        ) {
+            // The play icon stays fixed while the rest of the line swaps states.
+            Icon(
+                imageVector = Icons.Default.PlayArrow,
+                contentDescription = null,
+                tint = Fg,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClickLabel = "Passer le repos") { onAction(SessionAction.SkipRest) }
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .align(Alignment.CenterStart)
+                    .padding(start = 16.dp)
+                    .size(24.dp)
             )
+
+            AnimatedContent(
+                targetState = state.restRemainingSeconds != null,
+                transitionSpec = {
+                    (slideInVertically { it / 2 } + fadeIn())
+                        .togetherWith(slideOutVertically { -it / 2 } + fadeOut())
+                },
+                label = "miniPlayerContent",
+                modifier = Modifier.fillMaxSize()
+            ) { resting ->
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier.align(Alignment.Center),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = when {
+                                !resting -> formatClock(state.elapsedSeconds)
+                                state.isRestVibrating -> "Repos terminé !"
+                                else -> "Repos ${formatClock(state.restRemainingSeconds ?: 0)}"
+                            },
+                            color = Fg,
+                            maxLines = 1,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        if (!resting) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Séance en cours",
+                                color = Fg.copy(alpha = 0.85f),
+                                maxLines = 1,
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp)
+                            )
+                        }
+                    }
+
+                    if (!resting) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = null,
+                            tint = Fg,
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 16.dp)
+                                .size(22.dp)
+                        )
+                    } else {
+                        Text(
+                            text = "Passer",
+                            color = Fg,
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 10.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.dp, Fg.copy(alpha = 0.55f), RoundedCornerShape(8.dp))
+                                .clickable(onClickLabel = "Passer le repos") {
+                                    onAction(SessionAction.SkipRest)
+                                }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Same 56dp gradient pill as the mini-player / home start button, hosting a plain centered action.
+ * Used by the navigation-root bottom slot when the live screen is on top: the mini-player morphs
+ * into the "Ajouter un exercice" control (the inverse of the home-screen swap).
+ */
+@Composable
+fun GradientPillButton(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .border(1.dp, Border, RoundedCornerShape(12.dp)),
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+        contentPadding = PaddingValues(0.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(PremiumGradient),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Fg,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = text,
+                    color = Fg,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            }
         }
     }
 }

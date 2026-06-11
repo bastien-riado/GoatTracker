@@ -10,8 +10,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
@@ -52,6 +55,8 @@ sealed interface SessionAction {
     data object Finish : SessionAction
     /** Skip the running rest timer. */
     data object SkipRest : SessionAction
+    /** Open the exercise picker on the live screen (the bottom slot's action while it is on top). */
+    data object AddExercise : SessionAction
 }
 
 /** Seam over the foreground service so the controller core stays testable without Android. */
@@ -116,11 +121,20 @@ class ActiveSessionController(
         }
     }
 
+    /**
+     * Actions the controller cannot execute itself because their handler lives in a screen (e.g.
+     * [SessionAction.AddExercise] opens the live screen's exercise picker). Screens collect this to
+     * react; buffered so a tap is never lost to a missing collector during recomposition.
+     */
+    private val _uiEvents = MutableSharedFlow<SessionAction>(extraBufferCapacity = 4)
+    val uiEvents: SharedFlow<SessionAction> = _uiEvents.asSharedFlow()
+
     /** Single entry point for the out-of-screen control surface (notification / mini-player). */
     fun dispatch(action: SessionAction) {
         when (action) {
             SessionAction.Finish -> finishActiveSession()
             SessionAction.SkipRest -> restTimer.acknowledge()
+            SessionAction.AddExercise -> _uiEvents.tryEmit(action)
             SessionAction.Open -> Unit // navigation is inherently a UI-layer concern
         }
     }

@@ -82,51 +82,9 @@ fun CreateExerciseScreen(
                 modifier = Modifier.border(0.dp, Color.Transparent)
             )
         },
-        bottomBar = {
-            // Footer Save button
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Surface)
-                    .border(1.dp, Border, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                    .navigationBarsPadding()
-                    .imePadding()
-                    .padding(16.dp)
-            ) {
-                Button(
-                    onClick = { viewModel.saveExercise() },
-                    enabled = state.isSaveEnabled,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .border(1.dp, if (state.isSaveEnabled) Border else Color.Transparent, RoundedCornerShape(12.dp)),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Transparent,
-                        disabledContainerColor = SurfaceElevated
-                    ),
-                    contentPadding = PaddingValues(0.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    val buttonBgModifier = if (state.isSaveEnabled) {
-                        Modifier.background(PremiumGradient)
-                    } else {
-                        Modifier.background(Color.Transparent)
-                    }
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(buttonBgModifier),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (exerciseId != null) "Enregistrer les modifications" else "Enregistrer l'exercice",
-                            color = if (state.isSaveEnabled) Fg else Muted,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                    }
-                }
-            }
-        },
+        // No bottomBar: the save button scrolls WITH the form as its last element, so the
+        // navigation-root mini-player (only present during an active session) never hides it —
+        // extra bottom clearance below keeps it tappable even with the pill docked.
         containerColor = Bg
     ) { innerPadding ->
         Column(
@@ -134,6 +92,7 @@ fun CreateExerciseScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
+                .imePadding()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
@@ -311,6 +270,44 @@ fun CreateExerciseScreen(
                     }
                 }
             }
+
+            // 6. Save button — last element of the form, scrolls with it.
+            Button(
+                onClick = { viewModel.saveExercise() },
+                enabled = state.isSaveEnabled,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .border(1.dp, if (state.isSaveEnabled) Border else Color.Transparent, RoundedCornerShape(12.dp)),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Transparent,
+                    disabledContainerColor = SurfaceElevated
+                ),
+                contentPadding = PaddingValues(0.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                val buttonBgModifier = if (state.isSaveEnabled) {
+                    Modifier.background(PremiumGradient)
+                } else {
+                    Modifier.background(Color.Transparent)
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(buttonBgModifier),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (exerciseId != null) "Enregistrer les modifications" else "Enregistrer l'exercice",
+                        color = if (state.isSaveEnabled) Fg else Muted,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+            }
+
+            // Clearance for the session mini-player docked by the navigation root, so the save
+            // button is always scrollable above it during an active session.
+            Spacer(modifier = Modifier.height(88.dp))
         }
     }
 }

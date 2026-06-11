@@ -76,6 +76,16 @@ fun LiveWorkoutScreen(
         viewModel.startOrResumeSession()
     }
 
+    // The bottom "Ajouter un exercice" control lives in the navigation-root slot (the morphing
+    // mini-player pill), outside this screen — it signals through the controller's uiEvents.
+    LaunchedEffect(Unit) {
+        ActiveSessionController.getInstance(context).uiEvents.collect { action ->
+            if (action is SessionAction.AddExercise) {
+                viewModel.setExercisePickerOpen(true)
+            }
+        }
+    }
+
     // Dynamic request for POST_NOTIFICATIONS permission on Android 13+
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -109,39 +119,17 @@ fun LiveWorkoutScreen(
                 onFinishClick = { viewModel.requestFinishSession() }
             )
         },
-        bottomBar = {
-            // Footer bottom button: "Ajouter un exercice"
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Surface)
-                    .border(1.dp, Border, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                    .navigationBarsPadding()
-                    .imePadding()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = { viewModel.setExercisePickerOpen(true) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .border(1.dp, Accent.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
-                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceElevated),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add", tint = Accent)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Ajouter un exercice", color = Accent, fontWeight = FontWeight.Bold)
-                }
-            }
-        },
+        // No bottomBar: "Ajouter un exercice" is hosted by the navigation-root bottom slot (the
+        // mini-player pill morphs into it while this screen is on top).
         containerColor = Bg
     ) { innerPadding ->
         Column(
             modifier = modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                // The Scaffold no longer carries an ime-aware bottom bar, so the content handles
+                // the keyboard inset itself (set fields must scroll clear of the IME).
+                .imePadding()
         ) {
 
             // ========== REST TIMER ZONE (sous le header) ==========
@@ -266,9 +254,10 @@ fun LiveWorkoutScreen(
                         )
                     }
 
-                    // Bottom padding so last exercise isn't hidden by bottom bar
+                    // Bottom clearance so the last exercise card can scroll fully above the
+                    // navigation-root pill (56dp) + its margins.
                     item {
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(104.dp))
                     }
                 }
             }

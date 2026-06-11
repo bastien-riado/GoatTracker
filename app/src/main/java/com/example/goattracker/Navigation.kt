@@ -1,7 +1,19 @@
 package com.example.goattracker
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -12,15 +24,20 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.goattracker.theme.Bg
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.example.goattracker.ui.live.ActiveSessionController
+import com.example.goattracker.ui.live.GradientPillButton
 import com.example.goattracker.ui.live.RestTimerManager
+import com.example.goattracker.ui.live.SessionAction
 import com.example.goattracker.ui.live.SessionMiniPlayer
 import com.example.goattracker.ui.main.MainScreen
 import com.example.goattracker.ui.create.CreateExerciseScreen
@@ -53,12 +70,25 @@ fun MainNavigation() {
       }
   }
 
-  // App-scoped active-session presence. The mini-player is docked above whatever screen is showing,
-  // EXCEPT the live screen itself (you're already there). Tapping it brings the live screen back —
-  // leaving the live screen just pops it, so the session keeps living here in the persisted draft.
+  // App-scoped active-session presence. On the home screen the mini-player takes the place of the
+  // "Démarrer une séance" button (passed into MainScreen below); on every other screen except the
+  // live one it is docked at the bottom with the same skin. Leaving the live screen just pops it —
+  // the session keeps living in the persisted draft and resurfaces here.
   val controller = remember(context) { ActiveSessionController.getInstance(context) }
   val miniState by controller.miniState.collectAsStateWithLifecycle()
-  val onLiveScreen = backStack.lastOrNull() is LiveWorkout
+  val topKey = backStack.lastOrNull()
+
+  // Bring the live screen back: pop anything stacked above an existing LiveWorkout entry (e.g. the
+  // in-session create-exercise flow), or push a fresh entry when none is in the stack.
+  val openSession: () -> Unit = {
+      if (backStack.any { it is LiveWorkout }) {
+          while (backStack.isNotEmpty() && backStack.lastOrNull() !is LiveWorkout) {
+              backStack.removeLastOrNull()
+          }
+      } else {
+          backStack.add(LiveWorkout())
+      }
+  }
 
   Box(modifier = Modifier.fillMaxSize()) {
   NavDisplay(
@@ -77,12 +107,35 @@ fun MainNavigation() {
     entryProvider =
       entryProvider {
         entry<Main> {
-          MainScreen(onItemClick = { navKey -> backStack.add(navKey) }, modifier = Modifier.safeDrawingPadding().padding(16.dp))
+          MainScreen(
+              onItemClick = { navKey -> backStack.add(navKey) },
+              modifier = Modifier.safeDrawingPadding().padding(16.dp),
+              // During a session the nav-root bottom slot (below) takes over the button's spot with
+              // the mini-player — MainScreen only hides its own "Démarrer une séance".
+              hasActiveSession = miniState != null
+          )
         }
         entry<CreateExercise> { key ->
           CreateExerciseScreen(exerciseId = key.exerciseId, onBackClick = { backStack.removeLastOrNull() })
         }
-        entry<LiveWorkout> { key ->
+        entry<LiveWorkout>(
+          // "Re-enter the session": the live screen slides up from the bottom — out of the
+          // mini-player — and slides back down into it when minimized (z-order keeps it on top
+          // during both transitions).
+          metadata = NavDisplay.transitionSpec {
+              ContentTransform(
+                  targetContentEnter = slideInVertically(tween(360)) { it } + fadeIn(tween(180)),
+                  initialContentExit = fadeOut(tween(360)),
+                  targetContentZIndex = 1f
+              )
+          } + NavDisplay.popTransitionSpec {
+              ContentTransform(
+                  targetContentEnter = fadeIn(tween(220)),
+                  initialContentExit = slideOutVertically(tween(320)) { it } + fadeOut(tween(320)),
+                  targetContentZIndex = -1f
+              )
+          }
+        ) { key ->
           LiveWorkoutScreen(
               sessionId = key.sessionId,
               onSessionExit = { backStack.removeLastOrNull() },
@@ -125,16 +178,45 @@ fun MainNavigation() {
       },
   )
 
+    // THE bottom slot: one persistent pill rendered once at the navigation root, so it never
+    // flashes or reloads across screen changes. Geometry matches the home button slot exactly
+    // (16dp screen padding + 16dp slot padding = 32dp insets). Its content morphs with the context:
+    // chrono mini-player everywhere, "Ajouter un exercice" while the live screen itself is on top.
     val mini = miniState
-    if (mini != null && !onLiveScreen) {
-      SessionMiniPlayer(
-        state = mini,
-        onOpen = { if (backStack.none { it is LiveWorkout }) backStack.add(LiveWorkout()) },
-        onAction = { controller.dispatch(it) },
+    if (mini != null) {
+      Box(
         modifier = Modifier
             .align(Alignment.BottomCenter)
-            .navigationBarsPadding(),
-      )
+            .fillMaxWidth()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color.Transparent, Bg.copy(alpha = 0.95f)),
+                    startY = 0f
+                )
+            )
+            .navigationBarsPadding()
+            .padding(start = 32.dp, end = 32.dp, bottom = 32.dp, top = 16.dp)
+      ) {
+        AnimatedContent(
+          targetState = topKey is LiveWorkout,
+          transitionSpec = { fadeIn(tween(220)).togetherWith(fadeOut(tween(220))) },
+          label = "bottomSlot"
+        ) { onLiveScreen ->
+          if (onLiveScreen) {
+            GradientPillButton(
+              text = "Ajouter un exercice",
+              icon = Icons.Default.Add,
+              onClick = { controller.dispatch(SessionAction.AddExercise) },
+            )
+          } else {
+            SessionMiniPlayer(
+              state = mini,
+              onOpen = openSession,
+              onAction = { controller.dispatch(it) },
+            )
+          }
+        }
+      }
     }
   }
 }

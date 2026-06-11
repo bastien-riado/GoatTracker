@@ -53,6 +53,9 @@ import com.example.goattracker.theme.*
 fun MainScreen(
     onItemClick: (NavKey) -> Unit,
     modifier: Modifier = Modifier,
+    // When a session is live the navigation-root bottom slot renders the mini-player at this exact
+    // spot, so the local "Démarrer une séance" button hides instead of stacking under it.
+    hasActiveSession: Boolean = false,
 ) {
     val context = LocalContext.current
     val viewModel: MainScreenViewModel = viewModel { 
@@ -191,52 +194,57 @@ fun MainScreen(
             }
         }
 
-        // 5. Floating Bottom Navigation Bar (Gradient Session Trigger Button)
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Bg.copy(alpha = 0.95f)),
-                        startY = 0f
-                    )
-                )
-                .padding(16.dp)
-        ) {
-            Button(
-                onClick = { onItemClick(LiveWorkout(null)) },
+        // 5. Floating Bottom Navigation Bar (Gradient Session Trigger Button). Hidden entirely
+        // (backdrop included) while a session is live: the navigation-root slot draws the
+        // mini-player + its own backdrop at this exact spot, and stacking the two fades would
+        // double-darken the bottom of the screen.
+        if (!hasActiveSession) {
+            Box(
                 modifier = Modifier
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(56.dp)
-                    .border(1.dp, Border, RoundedCornerShape(12.dp)),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                contentPadding = PaddingValues(0.dp),
-                shape = RoundedCornerShape(12.dp)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Bg.copy(alpha = 0.95f)),
+                            startY = 0f
+                        )
+                    )
+                    .padding(16.dp)
             ) {
-                Box(
+                Button(
+                    onClick = { onItemClick(LiveWorkout(null)) },
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(PremiumGradient)
-                        .padding(horizontal = 16.dp),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .border(1.dp, Border, RoundedCornerShape(12.dp)),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(PremiumGradient)
+                            .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Start",
-                            tint = Fg,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Démarrer une séance",
-                            color = Fg,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Start",
+                                tint = Fg,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Démarrer une séance",
+                                color = Fg,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
                     }
                 }
             }
