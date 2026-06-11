@@ -1,0 +1,106 @@
+name: Release
+
+# Push to release -> build a SIGNED release APK, publish it + version.json to a GitHub Release.
+# The app polls the fixed URL https://github.com/<owner>/<repo>/releases/latest/download/version.json
+# (the /latest/ path always resolves to the newest release) to detect updates. Zero infra cost.
+#
+# Branching model: master is the integration branch (CI runs unit tests there, see ci.yml);
+# the "release" branch IS production. Shipping a release is a deliberate fast-forward push:
+#   git push origin master:release
+# A guard step below refuses to publish anything if the pushed commit is not part of master,
+# so release can only ever contain commits that already landed on master.
+
+on:
+  push:
+    branches: [ release ]
+  workflow_dispatch: {}   # allow manual runs
+
+permissions:
+  contents: write          # required to create the GitHub Release + upload assets
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history needed for the ancestor check below
+
+      # Hard guard: refuse to release anything that did not go through master first.
+      # Fails the job BEFORE building/publishing if the pushed commit is not an ancestor
+      # of origin/master (e.g. a feature branch pushed to release by mistake).
+      - name: Verify release commit comes from master
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "::error::Commit $GITHUB_SHA is not on master. Release must be a fast-forward of master (git push origin master:release). Aborting."
+            exit 1
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # compileSdk 36 is recent; make sure the platform is present on the runner.
+      - name: Install Android platform 36
+        run: sdkmanager "platforms;android-36"
+
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - name: Build signed release APK
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease \
+            -PVERSION_CODE=${{ github.run_number }} \
+            -PVERSION_NAME=1.0.${{ github.run_number }} \
+            --no-daemon --stacktrace
+
+      - name: Prepare artifacts (APK + checksum + version.json)
+        run: |
+          set -euo pipefail
+          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n1)
+          test -n "$APK" || { echo "::error::No release APK produced"; exit 1; }
+          cp "$APK" goattracker-release.apk
+          SHA256=$(sha256sum goattracker-release.apk | cut -d' ' -f1)
+          VERSION_CODE=${{ github.run_number }}
+          VERSION_NAME=1.0.${{ github.run_number }}
+          APK_URL=https://github.com/${{ github.repository }}/releases/latest/download/goattracker-release.apk
+          # Patch notes shown in-app: PATCH_NOTES.md, written for NON-TECHNICAL end users
+          # (features/fixes in plain French — never commit messages). Finalize it on master
+          # before pushing master:release — it should aggregate everything shipped since the
+          # previous release; falls back to the bare version name if missing/empty.
+          if [ -s PATCH_NOTES.md ]; then NOTES_CLEAN="$(cat PATCH_NOTES.md)"; else NOTES_CLEAN="$VERSION_NAME"; fi
+          jq -n \
+            --argjson versionCode "$VERSION_CODE" \
+            --arg versionName "$VERSION_NAME" \
+            --arg apkUrl "$APK_URL" \
+            --arg sha256 "$SHA256" \
+            --arg notes "$NOTES_CLEAN" \
+            '{versionCode:$versionCode, versionName:$versionName, apkUrl:$apkUrl, sha256:$sha256, notes:$notes}' \
+            > version.json
+          echo "Generated version.json:"; cat version.json
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: v1.0.${{ github.run_number }}
+          body_path: PATCH_NOTES.md
+          make_latest: true
+          files: |
+            goattracker-release.apk
+            version.json

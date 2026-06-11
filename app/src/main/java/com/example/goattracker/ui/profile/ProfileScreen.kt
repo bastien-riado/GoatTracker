@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.goattracker.data.DefaultDataRepository
 import com.example.goattracker.domain.model.Exercise
+import com.example.goattracker.ui.bodyheatmap.BodyModelAssets
 import com.example.goattracker.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -50,6 +52,8 @@ import kotlin.math.sin
 fun ProfileScreen(
     onBackClick: () -> Unit,
     onSessionsClick: () -> Unit,
+    onBodyHeatmapClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -58,6 +62,10 @@ fun ProfileScreen(
     }
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Warm up the Filament engine + body model bytes while the user is still here, so navigating
+    // to the 3D heatmap is instant (see BodyModelAssets — app-scoped, created once).
+    LaunchedEffect(Unit) { BodyModelAssets.prewarm(context) }
 
     Scaffold(
         topBar = {
@@ -82,6 +90,23 @@ fun ProfileScreen(
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Back",
+                            tint = Fg
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = onSettingsClick,
+                        modifier = Modifier
+                            .padding(8.dp)
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(SurfaceElevated)
+                            .border(1.dp, Border, CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Paramètres",
                             tint = Fg
                         )
                     }
@@ -151,6 +176,42 @@ fun ProfileScreen(
                                 color = AccentSecondary,
                                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold)
                             )
+                        }
+                    }
+                }
+            }
+
+            // 1b. 3D muscle heatmap entry point
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SurfaceElevated),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, BorderSoft, RoundedCornerShape(12.dp))
+                        .clickable { onBodyHeatmapClick() }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("RÉCUPÉRATION MUSCULAIRE", color = Muted, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp))
+                            Text("Carte musculaire 3D", color = Fg, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("Tournez le corps pour voir les muscles récupérés", color = Muted, fontSize = 11.sp)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Accent.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Star, contentDescription = null, tint = Accent)
                         }
                     }
                 }

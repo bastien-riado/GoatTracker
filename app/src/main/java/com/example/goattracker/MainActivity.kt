@@ -22,6 +22,7 @@ import com.example.goattracker.data.DefaultDataRepository
 import com.example.goattracker.theme.GoatTrackerTheme
 import com.example.goattracker.ui.SplashScreen
 import com.example.goattracker.ui.live.ActiveSessionController
+import com.example.goattracker.update.UpdateGate
 import com.example.goattracker.ui.live.RestTimerManager
 import com.example.goattracker.ui.live.RestTimerService
 import com.example.goattracker.ui.live.RestTimerState
@@ -89,6 +90,9 @@ class MainActivity : ComponentActivity() {
                         if (showHome) MainNavigation() else SplashScreen()
                     }
                 }
+
+                // In-app self-update: silent check on launch, then dialog + download/install handoff.
+                UpdateGate()
             }
         }
     }

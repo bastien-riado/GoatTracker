@@ -3,6 +3,12 @@
 
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- In-app self-update: fetch the version metadata + download the APK over HTTPS, then hand the
+         downloaded package to the system installer. REQUEST_INSTALL_PACKAGES is required since the
+         app installs an APK itself (distribution is off-store). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- The rest-timer backup alarm is inexact (setAndAllowWhileIdle), so no exact-alarm permission
          is needed — this avoids the Play-policy restrictions on SCHEDULE_EXACT_ALARM / USE_EXACT_ALARM.
          The foreground service drives the precise finish while the process is alive; the inexact
@@ -28,6 +34,18 @@
             </intent-filter>
         </activity>
         
+        <!-- Exposes the downloaded APK (in cacheDir/updates) to the system package installer as a
+             content:// URI. file:// URIs are illegal since API 24 (FileUriExposedException). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <receiver android:name=".ui.live.RestTimerReceiver" android:exported="false" />
         
         <service
