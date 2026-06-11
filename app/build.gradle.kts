@@ -144,6 +144,10 @@ dependencies {
   // HTTP client for the in-app self-update check + APK download
   implementation(libs.okhttp)
 
+  // Health Connect — read-only body-weight sync (gated at runtime on API 28+, see
+  // health/HealthConnectWeightProvider; the library's minSdk 26 is overridden in the manifest)
+  implementation(libs.androidx.health.connect)
+
   // Material Icons Core
   implementation("androidx.compose.material:material-icons-core")
 }

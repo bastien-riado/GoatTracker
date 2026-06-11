@@ -172,7 +172,9 @@ fun CreateExerciseScreen(
                 var expanded by remember { mutableStateOf(false) }
                 val muscleGroups = listOf(
                     "Pectoraux", "Dos", "Épaules", "Quadriceps",
-                    "Ischio-jambiers", "Biceps", "Triceps", "Abdominaux"
+                    "Ischio-jambiers", "Fessiers", "Mollets", "Biceps", "Triceps", "Abdominaux",
+                    // For running/rowing-style exercises; intentionally unmapped on the 3D heatmap.
+                    "Cardio"
                 )
 
                 ExposedDropdownMenuBox(

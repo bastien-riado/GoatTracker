@@ -4,8 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.goattracker.data.DataRepository
 import com.example.goattracker.domain.OneRepMaxFormula
+import com.example.goattracker.domain.WorkoutMetrics
 import com.example.goattracker.domain.model.Exercise
+import com.example.goattracker.domain.model.ExerciseSession
 import com.example.goattracker.domain.model.TrackingType
+import com.example.goattracker.domain.model.UserProfile
 import com.example.goattracker.domain.model.WorkoutSession
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -27,17 +29,22 @@ sealed interface ExerciseDetailUiState {
     data class Error(val message: String) : ExerciseDetailUiState
     data class Success(
         val exercise: Exercise,
-        val estimatedOneRepMax: Double,
-        val maxWeight: Double,
+        val userProfile: UserProfile,
+        // Per-type records — only the fields relevant to exercise.trackingType are meaningful:
+        val maxWeight: Double,          // WEIGHT_REPS: heaviest completed set (kg)
+        val estimatedOneRepMax: Double, // WEIGHT_REPS: best Epley estimate (kg)
+        val maxReps: Int,               // BODYWEIGHT_REPS: best single completed set
+        val totalReps: Int,             // rep-based types: cumulative completed reps
+        val maxDurationSeconds: Int,    // TIME: longest single completed set
+        val maxDistanceKm: Double,      // DISTANCE: longest single completed set
+        val bestPaceSecPerKm: Double?,  // DISTANCE: best pace over sets with distance AND duration
+        // Progression metric (unit depends on type, see WorkoutMetrics.progressionValue):
         val maxSessionVolume: Double,
-        val totalVolume: Double,
         val totalSets: Int,
-        val totalReps: Int,
-        val lastWorkoutText: String,
         val volumeHistory: List<Double>,
         val volumeHistoryLabels: List<String>,
         val sessions: List<WorkoutSession>,
-        val lastExerciseSession: com.example.goattracker.domain.model.ExerciseSession? = null
+        val lastExerciseSession: ExerciseSession? = null
     ) : ExerciseDetailUiState
 }
 
@@ -71,124 +78,68 @@ class ExerciseDetailViewModel(
                     return@collectLatest
                 }
 
-                // Filter sessions that contain this exercise
+                val profile = state.userProfile
+                val bodyWeightKg = profile.bodyWeightKg
+
+                // Sessions that contain this exercise, and their per-session ExerciseSession
                 val exerciseSessions = state.sessions.filter { session ->
                     session.exercises.any { it.exercise.id == exerciseId }
                 }
+                val perSession = exerciseSessions
+                    .sortedBy { it.startTime }
+                    .map { session -> session to session.exercises.first { it.exercise.id == exerciseId } }
 
-                // All completed sets of this exercise
-                val allCompletedSets = exerciseSessions.flatMap { session ->
-                    session.exercises
-                        .filter { it.exercise.id == exerciseId }
-                        .flatMap { it.sets }
-                }.filter { it.isCompleted }
+                val allCompletedSets = perSession.flatMap { (_, es) -> es.sets }.filter { it.isCompleted }
 
-                // 1. Calculate Max Weight & Estimated 1RM
+                // --- Per-type records (single pass over completed sets) ---
                 var maxWeight = 0.0
                 var estimated1RM = 0.0
+                var maxReps = 0
+                var maxDurationSeconds = 0
+                var maxDistanceKm = 0.0
+                var bestPaceSecPerKm: Double? = null
                 allCompletedSets.forEach { set ->
-                    if (set.weight > maxWeight) {
-                        maxWeight = set.weight
-                    }
+                    if (set.weight > maxWeight) maxWeight = set.weight
+                    if (set.reps > maxReps) maxReps = set.reps
+                    if (set.durationSeconds > maxDurationSeconds) maxDurationSeconds = set.durationSeconds
+                    if (set.distanceKm > maxDistanceKm) maxDistanceKm = set.distanceKm
                     if (exercise.trackingType == TrackingType.WEIGHT_REPS && set.weight > 0 && set.reps > 0) {
                         val epley1RM = OneRepMaxFormula.EPLEY.strategy.calculate(set.weight, set.reps)
-                        if (epley1RM > estimated1RM) {
-                            estimated1RM = epley1RM
+                        if (epley1RM > estimated1RM) estimated1RM = epley1RM
+                    }
+                    if (exercise.trackingType == TrackingType.DISTANCE) {
+                        val pace = WorkoutMetrics.paceSecPerKm(set.durationSeconds, set.distanceKm)
+                        if (pace != null && (bestPaceSecPerKm == null || pace < bestPaceSecPerKm!!)) {
+                            bestPaceSecPerKm = pace
                         }
                     }
                 }
 
-                // 2. Calculate totals
-                val totalSets = allCompletedSets.size
-                val totalReps = allCompletedSets.sumOf { it.reps }
-                val totalVolume = allCompletedSets.sumOf { set ->
-                    when (exercise.trackingType) {
-                        TrackingType.WEIGHT_REPS -> set.weight * set.reps
-                        TrackingType.BODYWEIGHT_REPS -> set.reps.toDouble()
-                        TrackingType.TIME -> set.durationSeconds.toDouble()
-                        TrackingType.DISTANCE -> set.distanceKm * 1000.0
-                    }
+                // --- Progression: one point per session, in the type's own unit ---
+                val progressionPerSession = perSession.map { (session, es) ->
+                    session to WorkoutMetrics.progressionValue(es, bodyWeightKg)
                 }
-
-                // 3. Compute last workout text
-                val latestSession = exerciseSessions.maxByOrNull { it.startTime }
-                val latestCompletedSets = latestSession?.exercises
-                    ?.firstOrNull { it.exercise.id == exerciseId }
-                    ?.sets?.filter { it.isCompleted } ?: emptyList()
-
-                val lastWorkoutText = if (latestCompletedSets.isNotEmpty()) {
-                    when (exercise.trackingType) {
-                        TrackingType.WEIGHT_REPS -> {
-                            val sample = latestCompletedSets.first()
-                            "${latestCompletedSets.size}x${sample.reps} • ${sample.weight.toInt()}kg"
-                        }
-                        TrackingType.BODYWEIGHT_REPS -> {
-                            val sample = latestCompletedSets.first()
-                            "${latestCompletedSets.size}x${sample.reps} • PDC"
-                        }
-                        TrackingType.TIME -> {
-                            val totalSec = latestCompletedSets.sumOf { it.durationSeconds }
-                            val mins = totalSec / 60
-                            val secs = totalSec % 60
-                            String.format("%02d:%02d", mins, secs)
-                        }
-                        TrackingType.DISTANCE -> {
-                            val totalDist = latestCompletedSets.sumOf { it.distanceKm }
-                            String.format("%.2f km", totalDist)
-                        }
-                    }
-                } else {
-                    "Aucune série"
-                }
-
-                // 4. Compute Volume history for last 6 sessions (sorted chronologically)
-                val sortedChronologicalSessions = exerciseSessions.sortedBy { it.startTime }
-                val last6Sessions = sortedChronologicalSessions.takeLast(6)
-                val volumeHistory = last6Sessions.map { session ->
-                    val exSession = session.exercises.first { it.exercise.id == exerciseId }
-                    exSession.sets.filter { it.isCompleted }.sumOf { set ->
-                        when (exercise.trackingType) {
-                            TrackingType.WEIGHT_REPS -> set.weight * set.reps
-                            TrackingType.BODYWEIGHT_REPS -> set.reps.toDouble()
-                            TrackingType.TIME -> set.durationSeconds.toDouble()
-                            TrackingType.DISTANCE -> set.distanceKm * 1000.0
-                        }
-                    }
-                }
-                
+                val last6 = progressionPerSession.takeLast(6)
                 val dateFormat = SimpleDateFormat("dd/MM", Locale.getDefault())
-                val volumeHistoryLabels = last6Sessions.map { session ->
-                    dateFormat.format(Date(session.startTime))
-                }
 
-                // Calculate max volume achieved in a single session
-                val maxSessionVolume = exerciseSessions.map { session ->
-                    val exSession = session.exercises.first { it.exercise.id == exerciseId }
-                    exSession.sets.filter { it.isCompleted }.sumOf { set ->
-                        when (exercise.trackingType) {
-                            TrackingType.WEIGHT_REPS -> set.weight * set.reps
-                            TrackingType.BODYWEIGHT_REPS -> set.reps.toDouble()
-                            TrackingType.TIME -> set.durationSeconds.toDouble()
-                            TrackingType.DISTANCE -> set.distanceKm * 1000.0
-                        }
-                    }
-                }.maxOrNull() ?: 0.0
-
-                val lastExerciseSession = latestSession?.exercises?.firstOrNull { it.exercise.id == exerciseId }
+                val latest = perSession.lastOrNull()
 
                 _uiState.value = ExerciseDetailUiState.Success(
                     exercise = exercise,
-                    estimatedOneRepMax = estimated1RM,
+                    userProfile = profile,
                     maxWeight = maxWeight,
-                    maxSessionVolume = maxSessionVolume,
-                    totalVolume = totalVolume,
-                    totalSets = totalSets,
-                    totalReps = totalReps,
-                    lastWorkoutText = lastWorkoutText,
-                    volumeHistory = volumeHistory,
-                    volumeHistoryLabels = volumeHistoryLabels,
+                    estimatedOneRepMax = estimated1RM,
+                    maxReps = maxReps,
+                    totalReps = allCompletedSets.sumOf { it.reps },
+                    maxDurationSeconds = maxDurationSeconds,
+                    maxDistanceKm = maxDistanceKm,
+                    bestPaceSecPerKm = bestPaceSecPerKm,
+                    maxSessionVolume = progressionPerSession.maxOfOrNull { it.second } ?: 0.0,
+                    totalSets = allCompletedSets.size,
+                    volumeHistory = last6.map { it.second },
+                    volumeHistoryLabels = last6.map { dateFormat.format(Date(it.first.startTime)) },
                     sessions = exerciseSessions.sortedByDescending { it.startTime },
-                    lastExerciseSession = lastExerciseSession
+                    lastExerciseSession = latest?.second
                 )
             }
         }

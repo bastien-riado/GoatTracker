@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.goattracker.data.DataRepository
 import com.example.goattracker.domain.OneRepMaxFormula
 import com.example.goattracker.domain.OneRepMaxStrategy
+import com.example.goattracker.domain.WorkoutMetrics
 import com.example.goattracker.domain.model.*
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -16,12 +17,13 @@ import kotlinx.coroutines.launch
 
 data class ProfileUiState(
     val totalWorkouts: Int = 0,
-    val cumulativeVolume: Double = 0.0,
+    val cumulativeVolume: Double = 0.0, // Strength tonnage in kg (endurance types excluded)
     val selectedExercise: Exercise? = null,
     val availableExercises: List<Exercise> = emptyList(),
     val oneRepMaxEvolution: List<Pair<Long, Double>> = emptyList(), // Timestamp -> 1RM kg
     val muscleGroupSets: Map<String, Int> = emptyMap(), // Muscle -> Sets count
-    val sessionVolumes: List<Pair<String, Double>> = emptyList() // Session Name -> Tonnage Volume
+    val sessionVolumes: List<Pair<String, Double>> = emptyList(), // Session Name -> Tonnage kg
+    val userProfile: UserProfile = UserProfile()
 )
 
 class ProfileViewModel(
@@ -53,8 +55,11 @@ class ProfileViewModel(
 
     private fun calculateStats(state: WorkoutState) {
         val totalWorkouts = state.sessions.size
-        val cumulativeVolume = state.sessions.sumOf { it.totalVolume }
-        
+        val bodyWeightKg = state.userProfile.bodyWeightKg
+        // Strength tonnage only: bodyweight reps count via the user's body weight; endurance
+        // exercises (time/distance) no longer pollute a kg total.
+        val cumulativeVolume = state.sessions.sumOf { WorkoutMetrics.sessionStrengthVolumeKg(it, bodyWeightKg) }
+
         // Calculate muscle splits
         val muscleSetsMap = mutableMapOf<String, Int>()
         state.sessions.forEach { session ->
@@ -69,7 +74,7 @@ class ProfileViewModel(
         val last6Sessions = state.sessions.sortedBy { it.startTime }.takeLast(6)
         val sessionVolumes = last6Sessions.map { session ->
             val shortName = session.name.replace("Séance du ", "")
-            shortName to session.totalVolume
+            shortName to WorkoutMetrics.sessionStrengthVolumeKg(session, bodyWeightKg)
         }
 
         // Filter exercises present in at least one session, sorted alphabetically
@@ -89,7 +94,8 @@ class ProfileViewModel(
                 availableExercises = exercisesInSessions,
                 selectedExercise = currentSelected,
                 muscleGroupSets = muscleSetsMap,
-                sessionVolumes = sessionVolumes
+                sessionVolumes = sessionVolumes,
+                userProfile = state.userProfile
             )
         }
 

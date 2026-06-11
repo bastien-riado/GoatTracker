@@ -1,8 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- connect-client declares minSdk 26; the app stays at 24. Safe because every Health Connect
+         call is gated on API 28+ at runtime (HealthConnectWeightProvider.isSupported). -->
+    <uses-sdk tools:overrideLibrary="androidx.health.connect.client" />
 
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Health Connect: read-only access to the user's body weight (opt-in sync in settings). -->
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+
+    <!-- Needed to query the Health Connect provider's availability on Android 11+. -->
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
 
     <!-- In-app self-update: fetch the version metadata + download the APK over HTTPS, then hand the
          downloaded package to the system installer. REQUEST_INSTALL_PACKAGES is required since the
@@ -32,7 +45,23 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Health Connect (Android 13-) opens this when the user taps our privacy rationale. -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
         </activity>
+
+        <!-- Same rationale entry point for Android 14+, which uses the system intent instead. -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".MainActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
         
         <!-- Exposes the downloaded APK (in cacheDir/updates) to the system package installer as a
              content:// URI. file:// URIs are illegal since API 24 (FileUriExposedException). -->
