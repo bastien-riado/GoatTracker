@@ -1,9 +1,13 @@
 package com.example.goattracker.data
 
+import com.example.goattracker.domain.WorkoutMetrics
+import com.example.goattracker.domain.model.BodyWeightSource
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.ExerciseSession
 import com.example.goattracker.domain.model.TrackingType
+import com.example.goattracker.domain.model.UserProfile
+import com.example.goattracker.domain.model.WeightUnit
 import com.example.goattracker.domain.model.WorkoutSession
 import com.example.goattracker.domain.model.WorkoutSet
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -31,10 +35,11 @@ class DataRepositoryTest {
         )
         val state = repository.workoutState.first()
         
-        assertEquals(3, state.exercises.size)
+        assertEquals(4, state.exercises.size)
         assertEquals("Développé Couché", state.exercises[0].name)
         assertEquals("Tractions Pronation", state.exercises[1].name)
         assertEquals("Squat Barre", state.exercises[2].name)
+        assertEquals("Course à pied", state.exercises[3].name)
     }
 
     @Test
@@ -54,9 +59,9 @@ class DataRepositoryTest {
         )
         
         repository.addExercise(customExercise)
-        
+
         val state = repository.workoutState.first()
-        assertEquals(4, state.exercises.size)
+        assertEquals(5, state.exercises.size)
         assertTrue(state.exercises.any { it.name == "Curl Biceps" })
     }
 
@@ -75,7 +80,7 @@ class DataRepositoryTest {
         repository.deleteExercise(targetId)
         
         val stateAfter = repository.workoutState.first()
-        assertEquals(2, stateAfter.exercises.size)
+        assertEquals(3, stateAfter.exercises.size)
         assertTrue(stateAfter.exercises.none { it.id == targetId })
     }
 
@@ -117,7 +122,7 @@ class DataRepositoryTest {
         assertEquals(1, savedSession.exercises.size)
         
         // Tonnage Volume calculation: 80*10 + 85*8 = 800 + 680 = 1480kg. 90*5 is uncompleted and must be ignored.
-        assertEquals(1480.0, savedSession.totalVolume, 0.001)
+        assertEquals(1480.0, WorkoutMetrics.sessionStrengthVolumeKg(savedSession, bodyWeightKg = null), 0.001)
         
         // Delete session
         repository.deleteWorkoutSession(session.id)
@@ -136,7 +141,7 @@ class DataRepositoryTest {
 
         // Fell back to the default preset instead of crashing...
         val state = repository.workoutState.first()
-        assertEquals(3, state.exercises.size)
+        assertEquals(4, state.exercises.size)
         // ...and the unreadable file was preserved rather than silently wiped.
         val backups = dir.listFiles { f -> f.name.startsWith("workouts.corrupt-") } ?: emptyArray()
         assertTrue("expected a corrupt-file backup to be created", backups.isNotEmpty())
@@ -158,6 +163,41 @@ class DataRepositoryTest {
         assertEquals(1, state.exercises.size)
         assertEquals("Legacy", state.exercises[0].name)
         assertNull(state.activeDraft)
+        // Files written before the user profile existed load with the default (empty) profile.
+        assertNull(state.userProfile.bodyWeightKg)
+        assertEquals(WeightUnit.KG, state.userProfile.weightUnit)
+    }
+
+    @Test
+    fun repository_userProfile_roundTripsThroughDisk() = runTest {
+        val testDispatcher = UnconfinedTestDispatcher(testScheduler)
+        val dir = File(System.getProperty("java.io.tmpdir"), "gt-profile-" + System.nanoTime()).apply { mkdirs() }
+
+        val first = DefaultDataRepository(storageDir = dir, dispatcher = testDispatcher, scope = TestScope(testDispatcher))
+        first.isReady.first { it }
+        first.saveUserProfile(
+            UserProfile(
+                bodyWeightKg = 72.5,
+                weightUnit = WeightUnit.LBS,
+                healthConnectSyncEnabled = true,
+                bodyWeightUpdatedAt = 42L,
+                bodyWeightSource = BodyWeightSource.HEALTH_CONNECT,
+            )
+        )
+        // The disk write is debounced; the repo scope shares this test's scheduler, so advancing
+        // virtual time past the debounce window executes the write synchronously (unconfined).
+        testScheduler.advanceTimeBy(1_000)
+        testScheduler.runCurrent()
+        assertTrue(File(dir, "workouts.json").readText().contains("bodyWeightKg"))
+
+        val second = DefaultDataRepository(storageDir = dir, dispatcher = testDispatcher, scope = TestScope(testDispatcher))
+        second.isReady.first { it }
+        val profile = second.workoutState.first().userProfile
+        assertEquals(72.5, profile.bodyWeightKg!!, 0.0)
+        assertEquals(WeightUnit.LBS, profile.weightUnit)
+        assertTrue(profile.healthConnectSyncEnabled)
+        assertEquals(42L, profile.bodyWeightUpdatedAt)
+        assertEquals(BodyWeightSource.HEALTH_CONNECT, profile.bodyWeightSource)
     }
 }
 

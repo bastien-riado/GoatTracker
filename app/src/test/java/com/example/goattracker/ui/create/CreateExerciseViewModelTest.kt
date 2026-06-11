@@ -79,7 +79,7 @@ class CreateExerciseViewModelTest {
 
         // Verify that the exercise has been successfully inserted into repository database
         val repoState = repository.workoutState.first()
-        assertEquals(4, repoState.exercises.size) // 3 defaults + 1 custom
+        assertEquals(5, repoState.exercises.size) // 4 defaults + 1 custom
         val savedExercise = repoState.exercises.first { it.name == "Curl Halteres" }
         assertEquals(ExerciseCategory.PULL, savedExercise.category)
         assertEquals("Biceps", savedExercise.primaryMuscle)

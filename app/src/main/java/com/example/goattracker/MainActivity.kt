@@ -18,7 +18,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.health.BodyWeightSyncer
+import com.example.goattracker.health.HealthConnectWeightProvider
 import com.example.goattracker.theme.GoatTrackerTheme
 import com.example.goattracker.ui.SplashScreen
 import com.example.goattracker.ui.live.ActiveSessionController
@@ -30,6 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -64,6 +68,13 @@ class MainActivity : ComponentActivity() {
 
         // Handle navigation from notification when app is cold-started
         handleNavigationIntent(intent)
+
+        // Opt-in body-weight refresh from Health Connect on app open. Fire-and-forget: it waits for
+        // the data layer internally, no-ops unless the user enabled it in settings, and swallows
+        // provider failures (the manually entered weight then stays in place).
+        lifecycleScope.launch {
+            BodyWeightSyncer(HealthConnectWeightProvider(applicationContext), repository).syncIfEnabled()
+        }
 
         enableEdgeToEdge()
         setContent {

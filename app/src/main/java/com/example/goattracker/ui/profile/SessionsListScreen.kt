@@ -25,6 +25,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.domain.MetricFormatter
+import com.example.goattracker.domain.WorkoutMetrics
+import com.example.goattracker.domain.model.UserProfile
 import com.example.goattracker.domain.model.WorkoutSession
 import com.example.goattracker.theme.*
 import java.text.SimpleDateFormat
@@ -44,6 +47,7 @@ fun SessionsListScreen(
 
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val sortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
+    val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
 
     var sessionToDelete by remember { mutableStateOf<WorkoutSession?>(null) }
     val dateFormat = remember { SimpleDateFormat("EEE d MMM yyyy 'à' HH:mm", Locale.FRENCH) }
@@ -172,6 +176,7 @@ fun SessionsListScreen(
                     items(sessions, key = { it.id }) { session ->
                         SessionItemCard(
                             session = session,
+                            userProfile = userProfile,
                             dateFormat = dateFormat,
                             onDeleteClick = { sessionToDelete = session }
                         )
@@ -232,6 +237,7 @@ fun SessionsListScreen(
 @Composable
 fun SessionItemCard(
     session: WorkoutSession,
+    userProfile: UserProfile,
     dateFormat: SimpleDateFormat,
     onDeleteClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -240,12 +246,11 @@ fun SessionItemCard(
         dateFormat.format(Date(session.startTime)).replaceFirstChar { it.uppercase() }
     }
 
-    val volText = remember(session.totalVolume) {
-        if (session.totalVolume >= 1000.0) {
-            String.format("%.2f t", session.totalVolume / 1000.0)
-        } else {
-            "${session.totalVolume.toInt()} kg"
-        }
+    val volText = remember(session, userProfile) {
+        MetricFormatter.tonnage(
+            WorkoutMetrics.sessionStrengthVolumeKg(session, userProfile.bodyWeightKg),
+            userProfile.weightUnit
+        )
     }
 
     Card(
@@ -345,7 +350,7 @@ fun SessionItemCard(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "${exSession.exercise.name} (${exSession.completedSetsCount} séries • ${exSession.volumeMetricDisplay})",
+                                text = "${exSession.exercise.name} (${exSession.completedSetsCount} séries • ${MetricFormatter.exerciseSummary(exSession, userProfile)})",
                                 color = Fg2,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Normal

@@ -38,7 +38,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.domain.MetricFormatter
 import com.example.goattracker.domain.model.Exercise
+import com.example.goattracker.domain.model.WeightUnit
 import com.example.goattracker.ui.bodyheatmap.BodyModelAssets
 import com.example.goattracker.theme.*
 import java.text.SimpleDateFormat
@@ -165,12 +167,7 @@ fun ProfileScreen(
                         ) {
                             Text("VOLUME CUMULÉ", color = Muted, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp))
                             Spacer(modifier = Modifier.height(6.dp))
-                            val volume = state.cumulativeVolume
-                            val volText = if (volume >= 1000.0) {
-                                String.format("%.2f t", volume / 1000.0)
-                            } else {
-                                "${volume.toInt()} kg"
-                            }
+                            val volText = MetricFormatter.tonnage(state.cumulativeVolume, state.userProfile.weightUnit)
                             Text(
                                 text = volText,
                                 color = AccentSecondary,
@@ -303,6 +300,7 @@ fun ProfileScreen(
                         } else {
                             OneRepMaxLineChart(
                                 points = state.oneRepMaxEvolution,
+                                weightUnit = state.userProfile.weightUnit,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(180.dp)
@@ -392,7 +390,11 @@ fun ProfileScreen(
                             .padding(16.dp)
                     ) {
                         Text("HISTORIQUE DES SÉANCES", color = Muted, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp))
-                        Text("Volume total par séance (kg)", color = Fg, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        Text(
+                            "Volume total par séance (${state.userProfile.weightUnit.suffix})",
+                            color = Fg,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
 
                         Spacer(modifier = Modifier.height(24.dp))
 
@@ -408,6 +410,7 @@ fun ProfileScreen(
                         } else {
                             SessionVolumesBarChart(
                                 volumes = state.sessionVolumes,
+                                weightUnit = state.userProfile.weightUnit,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(180.dp)
@@ -423,6 +426,7 @@ fun ProfileScreen(
 @Composable
 fun OneRepMaxLineChart(
     points: List<Pair<Long, Double>>,
+    weightUnit: WeightUnit = WeightUnit.KG,
     modifier: Modifier = Modifier
 ) {
     Canvas(modifier = modifier.semantics { contentDescription = "Graphique d'évolution du 1RM estimé" }) {
@@ -524,8 +528,8 @@ fun OneRepMaxLineChart(
                 center = offset
             )
 
-            // Draw the weight value above the point
-            val weightText = "${pair.second.toInt()} kg"
+            // Draw the weight value above the point (1RM is stored in kg; convert for display)
+            val weightText = MetricFormatter.weight(pair.second, weightUnit)
             val valuePaint = android.graphics.Paint().apply {
                 color = Fg.toArgb()
                 textSize = 9.sp.toPx()
@@ -884,6 +888,7 @@ fun MuscleLegendItem(
 @Composable
 fun SessionVolumesBarChart(
     volumes: List<Pair<String, Double>>,
+    weightUnit: WeightUnit = WeightUnit.KG,
     modifier: Modifier = Modifier
 ) {
     Canvas(modifier = modifier.semantics { contentDescription = "Graphique du volume total par séance" }) {
@@ -922,11 +927,7 @@ fun SessionVolumesBarChart(
             )
 
             // Draw volume text above the bar
-            val volumeText = if (volume >= 1000.0) {
-                String.format("%.1f t", volume / 1000.0)
-            } else {
-                "${volume.toInt()} kg"
-            }
+            val volumeText = MetricFormatter.tonnage(volume, weightUnit)
 
             val valuePaint = android.graphics.Paint().apply {
                 color = Fg.toArgb()

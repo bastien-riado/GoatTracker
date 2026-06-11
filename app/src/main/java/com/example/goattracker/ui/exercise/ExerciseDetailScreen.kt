@@ -42,9 +42,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.domain.MetricFormatter
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.TrackingType
+import com.example.goattracker.domain.model.UserProfile
 import com.example.goattracker.ui.components.AppTextField
 import com.example.goattracker.domain.model.WorkoutSession
 import com.example.goattracker.theme.*
@@ -396,6 +398,7 @@ fun ExerciseDetailContentOverlay(
                                     volumes = state.volumeHistory,
                                     labels = state.volumeHistoryLabels,
                                     trackingType = exercise.trackingType,
+                                    userProfile = state.userProfile,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(160.dp)
@@ -504,16 +507,9 @@ fun ExerciseDetailContentOverlay(
                                             }
                                             Spacer(modifier = Modifier.width(12.dp))
                                             
-                                            val setText = when (exercise.trackingType) {
-                                                TrackingType.WEIGHT_REPS -> "${set.reps} reps @ ${set.weight.toInt()} kg"
-                                                TrackingType.BODYWEIGHT_REPS -> "${set.reps} reps (PDC)"
-                                                TrackingType.TIME -> {
-                                                    val m = set.durationSeconds / 60
-                                                    val s = set.durationSeconds % 60
-                                                    String.format("%02d:%02d", m, s)
-                                                }
-                                                TrackingType.DISTANCE -> String.format("%.2f km", set.distanceKm)
-                                            }
+                                            val setText = MetricFormatter.setLineCompact(
+                                                exercise.trackingType, set, state.userProfile
+                                            )
                                             
                                             Text(
                                                 text = setText,
@@ -553,6 +549,7 @@ fun ExerciseProgressChart(
     volumes: List<Double>,
     labels: List<String>,
     trackingType: TrackingType,
+    userProfile: UserProfile = UserProfile(),
     modifier: Modifier = Modifier
 ) {
     Canvas(modifier = modifier.semantics { contentDescription = "Graphique d'évolution du volume de l'exercice" }) {
@@ -642,17 +639,8 @@ fun ExerciseProgressChart(
                 center = point
             )
 
-            // Dynamic format based on tracking type
-            val volumeText = when (trackingType) {
-                TrackingType.WEIGHT_REPS -> "${vol.toInt()} kg"
-                TrackingType.BODYWEIGHT_REPS -> "${vol.toInt()} reps"
-                TrackingType.TIME -> {
-                    val m = vol.toInt() / 60
-                    val s = vol.toInt() % 60
-                    String.format("%d:%02d", m, s)
-                }
-                TrackingType.DISTANCE -> String.format("%.2f km", vol / 1000.0)
-            }
+            // Unit depends on the tracking type (kg / reps / time / km) — single source of truth.
+            val volumeText = MetricFormatter.progressionPoint(trackingType, vol, userProfile)
 
             val valuePaint = android.graphics.Paint().apply {
                 color = Color.White.toArgb()
@@ -722,27 +710,55 @@ fun SectionLabel(text: String) {
 
 @Composable
 fun RecordsGrid(exercise: Exercise, state: ExerciseDetailUiState.Success) {
+    val unit = state.userProfile.weightUnit
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            CompactStatCard(
-                title = "Charge Max",
-                value = if (state.maxWeight > 0) "${state.maxWeight.toInt()} kg" else "--",
-                description = "Série la plus lourde",
-                modifier = Modifier.weight(1f)
-            )
-            
-            if (exercise.trackingType == TrackingType.WEIGHT_REPS) {
-                CompactStatCard(
+            // First card: the record that makes sense for this tracking type.
+            when (exercise.trackingType) {
+                TrackingType.WEIGHT_REPS -> CompactStatCard(
+                    title = "Charge Max",
+                    value = if (state.maxWeight > 0) MetricFormatter.weight(state.maxWeight, unit) else "--",
+                    description = "Série la plus lourde",
+                    modifier = Modifier.weight(1f)
+                )
+                TrackingType.BODYWEIGHT_REPS -> CompactStatCard(
+                    title = "Reps Max",
+                    value = if (state.maxReps > 0) "${state.maxReps} reps" else "--",
+                    description = "Meilleure série au poids de corps",
+                    modifier = Modifier.weight(1f)
+                )
+                TrackingType.TIME -> CompactStatCard(
+                    title = "Durée Max",
+                    value = if (state.maxDurationSeconds > 0) MetricFormatter.duration(state.maxDurationSeconds) else "--",
+                    description = "Série la plus longue",
+                    modifier = Modifier.weight(1f)
+                )
+                TrackingType.DISTANCE -> CompactStatCard(
+                    title = "Distance Max",
+                    value = if (state.maxDistanceKm > 0) MetricFormatter.distance(state.maxDistanceKm) else "--",
+                    description = "Plus longue distance en une série",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Second card: 1RM for barbell work, best pace for cardio, set count otherwise.
+            when (exercise.trackingType) {
+                TrackingType.WEIGHT_REPS -> CompactStatCard(
                     title = "1RM Estimé",
-                    value = if (state.estimatedOneRepMax > 0) String.format("%.1f kg", state.estimatedOneRepMax) else "--",
+                    value = if (state.estimatedOneRepMax > 0) MetricFormatter.weight(state.estimatedOneRepMax, unit) else "--",
                     description = "Force max théorique",
                     modifier = Modifier.weight(1f)
                 )
-            } else {
-                CompactStatCard(
+                TrackingType.DISTANCE -> CompactStatCard(
+                    title = "Meilleure Allure",
+                    value = state.bestPaceSecPerKm?.let { MetricFormatter.pace(it) } ?: "--",
+                    description = "Allure moyenne la plus rapide",
+                    modifier = Modifier.weight(1f)
+                )
+                else -> CompactStatCard(
                     title = "Séries cumulées",
                     value = "${state.totalSets} séries",
                     description = "Historique cumulé",
@@ -750,24 +766,22 @@ fun RecordsGrid(exercise: Exercise, state: ExerciseDetailUiState.Success) {
                 )
             }
         }
-        
-        val volumeMaxText = when (exercise.trackingType) {
-            TrackingType.WEIGHT_REPS -> "${state.maxSessionVolume.toInt()} kg"
-            TrackingType.BODYWEIGHT_REPS -> "${state.maxSessionVolume.toInt()} reps"
-            TrackingType.TIME -> {
-                val m = state.maxSessionVolume.toInt() / 60
-                val s = state.maxSessionVolume.toInt() % 60
-                String.format("%02d:%02d", m, s)
-            }
-            TrackingType.DISTANCE -> String.format("%.2f km", state.maxSessionVolume / 1000.0)
-        }
-        
+
         CompactStatCard(
             title = "Volume Max sur une séance",
-            value = volumeMaxText,
+            value = MetricFormatter.progressionPoint(exercise.trackingType, state.maxSessionVolume, state.userProfile),
             description = "Meilleure performance globale sur une séance",
             modifier = Modifier.fillMaxWidth()
         )
+
+        // Bodyweight volume needs the user's weight: nudge until it is set (one-line, non-blocking).
+        if (exercise.trackingType == TrackingType.BODYWEIGHT_REPS && state.userProfile.bodyWeightKg == null) {
+            Text(
+                text = "Renseignez votre poids dans les Paramètres pour convertir ces répétitions en volume (${unit.suffix}).",
+                color = Muted,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp)
+            )
+        }
     }
 }
 
@@ -889,26 +903,9 @@ fun LastWorkoutPanel(state: ExerciseDetailUiState.Success) {
                     
                     Spacer(modifier = Modifier.width(16.dp))
                     
-                    val performanceText = when (state.exercise.trackingType) {
-                        TrackingType.WEIGHT_REPS -> "${set.reps} répétitions à ${set.weight.toInt()}kg"
-                        TrackingType.BODYWEIGHT_REPS -> "${set.reps} répétitions au poids de corps"
-                        TrackingType.TIME -> {
-                            val m = set.durationSeconds / 60
-                            val s = set.durationSeconds % 60
-                            if (m > 0) {
-                                if (s > 0) "$m minutes et $s secondes" else "$m minutes"
-                            } else {
-                                "$s secondes"
-                            }
-                        }
-                        TrackingType.DISTANCE -> {
-                            if (set.distanceKm >= 1.0) {
-                                String.format(Locale.US, "%.2f kilomètres", set.distanceKm)
-                            } else {
-                                "${(set.distanceKm * 1000).toInt()} mètres"
-                            }
-                        }
-                    }
+                    val performanceText = MetricFormatter.setLineVerbose(
+                        state.exercise.trackingType, set, state.userProfile
+                    )
                     
                     Text(
                         text = performanceText,

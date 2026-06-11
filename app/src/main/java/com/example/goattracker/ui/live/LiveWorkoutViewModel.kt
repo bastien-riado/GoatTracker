@@ -28,7 +28,9 @@ data class LiveWorkoutUiState(
     val plannedExercisesCount: Int = 0,
     val plannedSetsCount: Int = 0,
     val completedExercisesCount: Int = 0,
-    val completedSetsCount: Int = 0
+    val completedSetsCount: Int = 0,
+    // Needed by the set rows: weight unit for inputs and body weight for the PDC cell.
+    val userProfile: UserProfile = UserProfile()
 )
 
 class LiveWorkoutViewModel(
@@ -73,7 +75,7 @@ class LiveWorkoutViewModel(
                 }
                 knownExerciseIds = state.exercises.mapTo(HashSet()) { it.id }
 
-                _uiState.update { it.copy(availableExercises = state.exercises) }
+                _uiState.update { it.copy(availableExercises = state.exercises, userProfile = state.userProfile) }
             }
         }
 
@@ -208,24 +210,24 @@ class LiveWorkoutViewModel(
                 sets = prefilledSets
             )
         } else {
-            // Fallback to default hardcoded values (2 sets)
-            val defaultSet1 = when (exercise.trackingType) {
-                TrackingType.WEIGHT_REPS -> WorkoutSet(setNumber = 1, weight = 20.0, reps = 10)
-                TrackingType.BODYWEIGHT_REPS -> WorkoutSet(setNumber = 1, reps = 8)
-                TrackingType.TIME -> WorkoutSet(setNumber = 1, durationSeconds = 60)
-                TrackingType.DISTANCE -> WorkoutSet(setNumber = 1, distanceKm = 1.0)
-            }
-
-            val defaultSet2 = when (exercise.trackingType) {
-                TrackingType.WEIGHT_REPS -> WorkoutSet(setNumber = 2, weight = 20.0, reps = 10)
-                TrackingType.BODYWEIGHT_REPS -> WorkoutSet(setNumber = 2, reps = 8)
-                TrackingType.TIME -> WorkoutSet(setNumber = 2, durationSeconds = 60)
-                TrackingType.DISTANCE -> WorkoutSet(setNumber = 2, distanceKm = 1.0)
+            // Fallback defaults: 2 sets for strength work, a single open set for cardio/time
+            // (a run is one effort, not "2 sets of 1 km"; intervals are added via "Ajouter une série").
+            val defaultSets = when (exercise.trackingType) {
+                TrackingType.WEIGHT_REPS -> listOf(
+                    WorkoutSet(setNumber = 1, weight = 20.0, reps = 10),
+                    WorkoutSet(setNumber = 2, weight = 20.0, reps = 10)
+                )
+                TrackingType.BODYWEIGHT_REPS -> listOf(
+                    WorkoutSet(setNumber = 1, reps = 8),
+                    WorkoutSet(setNumber = 2, reps = 8)
+                )
+                TrackingType.TIME -> listOf(WorkoutSet(setNumber = 1, durationSeconds = 60))
+                TrackingType.DISTANCE -> listOf(WorkoutSet(setNumber = 1))
             }
 
             ExerciseSession(
                 exercise = exercise,
-                sets = listOf(defaultSet1, defaultSet2)
+                sets = defaultSets
             )
         }
 

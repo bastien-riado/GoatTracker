@@ -14,7 +14,9 @@ enum class TrackingType(val displayName: String) {
     WEIGHT_REPS("Poids + Répétitions"),
     BODYWEIGHT_REPS("Poids de corps + Répétitions"),
     TIME("Temps"),
-    DISTANCE("Distance")
+    // Cardio: a set carries a distance AND an optional duration (pace/speed are derived) — the
+    // enum NAME stays DISTANCE because it is persisted as a string in workouts.json.
+    DISTANCE("Distance + Temps")
 }
 
 data class Exercise(
@@ -44,59 +46,25 @@ data class ExerciseSession(
 ) {
     val completedSetsCount: Int
         get() = sets.count { it.isCompleted }
-
-    val volumeMetricDisplay: String
-        get() = when (exercise.trackingType) {
-            TrackingType.WEIGHT_REPS -> {
-                val maxWeight = sets.filter { it.isCompleted }.maxOfOrNull { it.weight } ?: 0.0
-                val repsForMax = sets.firstOrNull { it.isCompleted && it.weight == maxWeight }?.reps ?: 0
-                if (maxWeight > 0) "${maxWeight.toInt()}kg x $repsForMax" else "PDC"
-            }
-            TrackingType.BODYWEIGHT_REPS -> {
-                val maxReps = sets.filter { it.isCompleted }.maxOfOrNull { it.reps } ?: 0
-                "PDC x $maxReps"
-            }
-            TrackingType.TIME -> {
-                val totalSeconds = sets.filter { it.isCompleted }.sumOf { it.durationSeconds }
-                val minutes = totalSeconds / 60
-                val seconds = totalSeconds % 60
-                String.format("%02d:%02d", minutes, seconds)
-            }
-            TrackingType.DISTANCE -> {
-                val totalDistance = sets.filter { it.isCompleted }.sumOf { it.distanceKm }
-                String.format("%.2f km", totalDistance)
-            }
-        }
 }
 
+// Volume/tonnage and display strings deliberately do NOT live on these data classes: they depend on
+// the user profile (body weight, unit) — see domain.WorkoutMetrics and domain.MetricFormatter.
 data class WorkoutSession(
     val id: String = UUID.randomUUID().toString(),
     val startTime: Long = System.currentTimeMillis(),
     val endTime: Long? = null,
     val name: String,
     val exercises: List<ExerciseSession> = emptyList()
-) {
-    val totalVolume: Double
-        get() = exercises.sumOf { exerciseSession ->
-            exerciseSession.sets
-                .filter { it.isCompleted }
-                .sumOf { set ->
-                    when (exerciseSession.exercise.trackingType) {
-                        TrackingType.WEIGHT_REPS -> set.weight * set.reps
-                        TrackingType.BODYWEIGHT_REPS -> set.reps.toDouble() // Treat each rep as 1 unit of volume
-                        TrackingType.TIME -> set.durationSeconds.toDouble() // Treat seconds as volume units
-                        TrackingType.DISTANCE -> set.distanceKm * 1000.0 // Treat meters as volume units
-                    }
-                }
-        }
-}
+)
 
 data class WorkoutState(
     val exercises: List<Exercise> = emptyList(),
     val sessions: List<WorkoutSession> = emptyList(),
     // In-progress live session, persisted so it survives process death (audit P0-1).
     // Null when no session is active; cleared on save or discard.
-    val activeDraft: WorkoutSession? = null
+    val activeDraft: WorkoutSession? = null,
+    val userProfile: UserProfile = UserProfile()
 )
 
 /**

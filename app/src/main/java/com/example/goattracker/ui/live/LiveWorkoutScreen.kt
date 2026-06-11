@@ -35,6 +35,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.domain.MetricFormatter
 import com.example.goattracker.domain.model.*
 import com.example.goattracker.theme.*
 import com.example.goattracker.ui.components.AppNumberField
@@ -240,6 +241,7 @@ fun LiveWorkoutScreen(
 
                         ExerciseSessionCard(
                             session = exerciseSession,
+                            userProfile = state.userProfile,
                             isFullyCompleted = isFullyCompleted,
                             onAddSet = { viewModel.addSetToExercise(exerciseSession.exercise.id) },
                             onDeleteSet = { setId -> viewModel.deleteSetFromExercise(exerciseSession.exercise.id, setId) },
@@ -697,6 +699,7 @@ fun SessionHeader(
 @Composable
 fun ExerciseSessionCard(
     session: ExerciseSession,
+    userProfile: UserProfile,
     isFullyCompleted: Boolean,
     onAddSet: () -> Unit,
     onDeleteSet: (String) -> Unit,
@@ -809,7 +812,13 @@ fun ExerciseSessionCard(
                 Column {
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Sets Table Column Labels
+                    // Sets Table Column Labels — adapted to what the type actually captures
+                    val (col2Label, col3Label) = when (session.exercise.trackingType) {
+                        TrackingType.WEIGHT_REPS -> userProfile.weightUnit.suffix.uppercase() to "REPS"
+                        TrackingType.BODYWEIGHT_REPS -> "CHARGE" to "REPS"
+                        TrackingType.TIME -> "SECONDES" to ""
+                        TrackingType.DISTANCE -> "KM" to "MIN"
+                    }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -817,8 +826,8 @@ fun ExerciseSessionCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("SÉRIE", color = Muted, fontWeight = FontWeight.Bold, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(0.22f))
-                        Text("KG / INFOS", color = Muted, fontWeight = FontWeight.Bold, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(0.33f))
-                        Text("REPS", color = Muted, fontWeight = FontWeight.Bold, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(0.20f))
+                        Text(col2Label, color = Muted, fontWeight = FontWeight.Bold, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(0.33f))
+                        Text(col3Label, color = Muted, fontWeight = FontWeight.Bold, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(0.20f))
                         Text("CHECK", color = Muted, fontWeight = FontWeight.Bold, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(0.25f))
                     }
 
@@ -827,6 +836,7 @@ fun ExerciseSessionCard(
                         SetRowItem(
                             set = set,
                             trackingType = session.exercise.trackingType,
+                            userProfile = userProfile,
                             onDelete = { onDeleteSet(set.id) },
                             onUpdateValues = { weight, reps, durationSeconds, distanceKm ->
                                 onUpdateSetValues(set.id, weight, reps, durationSeconds, distanceKm)
@@ -860,12 +870,31 @@ fun ExerciseSessionCard(
     }
 }
 
-// ========== SET ROW ITEM (unchanged logic) ==========
+// ========== SET ROW ITEM ==========
+
+/** Editable representation of a decimal value: dot separator, no trailing ".0", empty when unset. */
+private fun Double.toEditableString(): String = when {
+    this <= 0.0 -> ""
+    this % 1.0 == 0.0 -> toInt().toString()
+    else -> toString()
+}
+
+/**
+ * Weight as shown in an editable field, in the user's unit, rounded to 2 decimals. The rounding is
+ * what keeps the kg↔lbs round-trip stable while typing: 100 lbs stored as 45.359237 kg would
+ * otherwise re-display as "100.00000000000001".
+ */
+private fun editableWeight(kg: Double, unit: WeightUnit): String =
+    (kotlin.math.round(unit.fromKg(kg) * 100) / 100.0).toEditableString()
+
+/** Tolerant decimal parse: accepts both "72.5" and "72,5" (French numeric keyboards emit commas). */
+private fun String.parseDecimal(): Double? = replace(',', '.').toDoubleOrNull()
 
 @Composable
 fun SetRowItem(
     set: WorkoutSet,
     trackingType: TrackingType,
+    userProfile: UserProfile,
     onDelete: () -> Unit,
     onUpdateValues: (Double?, Int?, Int?, Double?) -> Unit,
     onToggle: () -> Unit
@@ -897,7 +926,7 @@ fun SetRowItem(
             )
         }
 
-        // Weight / Distance / Time Input Field
+        // Column 2: load (weight types) / seconds (time) / distance (cardio)
         Box(
             modifier = Modifier
                 .weight(0.33f)
@@ -906,16 +935,19 @@ fun SetRowItem(
         ) {
             when (trackingType) {
                 TrackingType.WEIGHT_REPS -> {
-                    var weightText by remember(set.weight) { mutableStateOf(if (set.weight > 0) set.weight.toInt().toString() else "") }
+                    val unit = userProfile.weightUnit
+                    // Edited in the user's unit, stored in kg. Decimal-preserving: the old
+                    // `weight.toInt()` displayed a 22.5 kg set as "22".
+                    var weightText by remember(set.weight, unit) {
+                        mutableStateOf(editableWeight(set.weight, unit))
+                    }
                     AppNumberField(
                         value = weightText,
                         onValueChange = {
                             weightText = it
-                            val parsed = it.toDoubleOrNull()
-                            if (parsed != null) {
-                                onUpdateValues(parsed, null, null, null)
-                            }
-                        }
+                            it.parseDecimal()?.let { v -> onUpdateValues(unit.toKg(v), null, null, null) }
+                        },
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
                     )
                 }
                 TrackingType.BODYWEIGHT_REPS -> {
@@ -928,7 +960,14 @@ fun SetRowItem(
                             .border(1.dp, BorderSoft, RoundedCornerShape(8.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("PDC", color = Muted, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        // Show the actual load when the body weight is known: it IS the charge moved.
+                        val bw = userProfile.bodyWeightKg
+                        Text(
+                            text = if (bw != null) "PDC • ${MetricFormatter.weight(bw, userProfile.weightUnit)}" else "PDC",
+                            color = Muted,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
                     }
                 }
                 TrackingType.TIME -> {
@@ -946,41 +985,57 @@ fun SetRowItem(
                     )
                 }
                 TrackingType.DISTANCE -> {
-                    // Wired to the ViewModel so the distance is actually persisted (audit P0-2).
                     var distText by remember(set.distanceKm) {
-                        mutableStateOf(if (set.distanceKm > 0.0) set.distanceKm.toString() else "")
+                        mutableStateOf(set.distanceKm.toEditableString())
                     }
                     AppNumberField(
                         value = distText,
                         onValueChange = {
                             distText = it
-                            it.toDoubleOrNull()?.let { km -> onUpdateValues(null, null, null, km) }
-                        }
+                            it.parseDecimal()?.let { km -> onUpdateValues(null, null, null, km) }
+                        },
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
                     )
                 }
             }
         }
 
-        // Reps Input Field — only meaningful for rep-based tracking. For TIME/DISTANCE we keep the
-        // column (empty) so the row stays aligned with the header, but show no misleading reps input.
+        // Column 3: reps for rep-based types, duration (minutes) for cardio, empty for TIME —
+        // the column is kept either way so rows stay aligned with the header.
         Box(
             modifier = Modifier
                 .weight(0.20f)
                 .padding(horizontal = 4.dp),
             contentAlignment = Alignment.Center
         ) {
-            if (trackingType == TrackingType.WEIGHT_REPS || trackingType == TrackingType.BODYWEIGHT_REPS) {
-                var repsText by remember(set.reps) { mutableStateOf(if (set.reps > 0) set.reps.toString() else "") }
-                AppNumberField(
-                    value = repsText,
-                    onValueChange = {
-                        repsText = it
-                        val parsed = it.toIntOrNull()
-                        if (parsed != null) {
-                            onUpdateValues(null, parsed, null, null)
+            when (trackingType) {
+                TrackingType.WEIGHT_REPS, TrackingType.BODYWEIGHT_REPS -> {
+                    var repsText by remember(set.reps) { mutableStateOf(if (set.reps > 0) set.reps.toString() else "") }
+                    AppNumberField(
+                        value = repsText,
+                        onValueChange = {
+                            repsText = it
+                            val parsed = it.toIntOrNull()
+                            if (parsed != null) {
+                                onUpdateValues(null, parsed, null, null)
+                            }
                         }
+                    )
+                }
+                TrackingType.DISTANCE -> {
+                    // Whole minutes; pace/speed derive from distance + duration. Stored as seconds.
+                    var minutesText by remember(set.durationSeconds) {
+                        mutableStateOf(if (set.durationSeconds > 0) (set.durationSeconds / 60).toString() else "")
                     }
-                )
+                    AppNumberField(
+                        value = minutesText,
+                        onValueChange = {
+                            minutesText = it
+                            it.toIntOrNull()?.let { min -> onUpdateValues(null, null, min * 60, null) }
+                        }
+                    )
+                }
+                TrackingType.TIME -> Unit
             }
         }
 

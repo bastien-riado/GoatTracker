@@ -3,9 +3,11 @@ package com.example.goattracker.ui.main
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.goattracker.data.DataRepository
+import com.example.goattracker.domain.MetricFormatter
+import com.example.goattracker.domain.WorkoutMetrics
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
-import com.example.goattracker.domain.model.TrackingType
+import com.example.goattracker.domain.model.UserProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,7 +45,7 @@ class MainScreenViewModel(private val dataRepository: DataRepository) : ViewMode
         }
 
         val statsMap = filteredExercises.associate { exercise ->
-            exercise.id to calculateStatsForExercise(exercise, state.sessions)
+            exercise.id to calculateStatsForExercise(exercise, state.sessions, state.userProfile)
         }
 
         MainScreenUiState.Success(
@@ -75,7 +77,11 @@ class MainScreenViewModel(private val dataRepository: DataRepository) : ViewMode
         }
     }
 
-    private fun calculateStatsForExercise(exercise: Exercise, sessions: List<com.example.goattracker.domain.model.WorkoutSession>): ExerciseStats {
+    private fun calculateStatsForExercise(
+        exercise: Exercise,
+        sessions: List<com.example.goattracker.domain.model.WorkoutSession>,
+        userProfile: UserProfile
+    ): ExerciseStats {
         // Find all sessions containing this exercise, sorted by time ascending
         val exerciseSessions = sessions.filter { session ->
             session.exercises.any { it.exercise.id == exercise.id }
@@ -91,45 +97,20 @@ class MainScreenViewModel(private val dataRepository: DataRepository) : ViewMode
         // Get the latest session text
         val latestSession = exerciseSessions.last()
         val latestExerciseSession = latestSession.exercises.first { it.exercise.id == exercise.id }
-        
+
         val completedSets = latestExerciseSession.sets.filter { it.isCompleted }
         val lastWorkoutText = if (completedSets.isNotEmpty()) {
-            when (exercise.trackingType) {
-                TrackingType.WEIGHT_REPS -> {
-                    val sampleSet = completedSets.first()
-                    "Dernier: ${completedSets.size}x${sampleSet.reps} • ${sampleSet.weight.toInt()}kg"
-                }
-                TrackingType.BODYWEIGHT_REPS -> {
-                    val sampleSet = completedSets.first()
-                    "Dernier: ${completedSets.size}x${sampleSet.reps} • PDC"
-                }
-                TrackingType.TIME -> {
-                    val totalSec = completedSets.sumOf { it.durationSeconds }
-                    val mins = totalSec / 60
-                    val secs = totalSec % 60
-                    String.format("Dernier: %02d:%02d", mins, secs)
-                }
-                TrackingType.DISTANCE -> {
-                    val totalDist = completedSets.sumOf { it.distanceKm }
-                    String.format("Dernier: %.2f km", totalDist)
-                }
-            }
+            "Dernier: ${MetricFormatter.lastWorkoutLine(exercise.trackingType, completedSets, userProfile)}"
         } else {
             "Aucune série complétée"
         }
 
-        // Compute volume progression of the last 4 workouts
+        // Progression of the last 4 workouts, in the type's own metric (the chart is normalized so
+        // only relative values matter).
         val last4Sessions = exerciseSessions.takeLast(4)
         val volumes = last4Sessions.map { session ->
             val exSession = session.exercises.first { it.exercise.id == exercise.id }
-            exSession.sets.filter { it.isCompleted }.sumOf { set ->
-                when (exercise.trackingType) {
-                    TrackingType.WEIGHT_REPS -> set.weight * set.reps
-                    TrackingType.BODYWEIGHT_REPS -> set.reps.toDouble()
-                    TrackingType.TIME -> set.durationSeconds.toDouble()
-                    TrackingType.DISTANCE -> set.distanceKm * 1000.0
-                }
-            }
+            WorkoutMetrics.progressionValue(exSession, userProfile.bodyWeightKg)
         }
 
         // Normalize volumes between 0.1f and 1.0f for bar chart drawing (0.1f minimum so bars are visible)

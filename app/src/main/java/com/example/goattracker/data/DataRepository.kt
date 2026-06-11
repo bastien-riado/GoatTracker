@@ -5,6 +5,7 @@ import com.example.goattracker.data.dto.toDto
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.TrackingType
+import com.example.goattracker.domain.model.UserProfile
 import com.example.goattracker.domain.model.WorkoutSession
 import com.example.goattracker.domain.model.WorkoutState
 import kotlinx.coroutines.CoroutineDispatcher
@@ -40,6 +41,9 @@ interface DataRepository {
 
     /** Persist (or clear, when null) the in-progress live session so it survives process death. */
     suspend fun saveActiveDraft(session: WorkoutSession?)
+
+    /** Persist the user profile (body weight, unit preference, Health Connect opt-in). */
+    suspend fun saveUserProfile(profile: UserProfile)
 }
 
 class DefaultDataRepository(
@@ -209,6 +213,11 @@ class DefaultDataRepository(
         saveToDisk()
     }
 
+    override suspend fun saveUserProfile(profile: UserProfile) {
+        _workoutState.update { it.copy(userProfile = profile) }
+        saveToDisk()
+    }
+
     private fun defaultExercises(): List<Exercise> {
         return listOf(
             Exercise(
@@ -231,6 +240,13 @@ class DefaultDataRepository(
                 primaryMuscle = "Quadriceps",
                 trackingType = TrackingType.WEIGHT_REPS,
                 restTimeSeconds = 150
+            ),
+            Exercise(
+                name = "Course à pied",
+                category = ExerciseCategory.CARDIO,
+                primaryMuscle = "Cardio",
+                trackingType = TrackingType.DISTANCE,
+                restTimeSeconds = 60
             )
         )
     }

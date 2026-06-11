@@ -179,7 +179,11 @@ class LiveWorkoutViewModelTest {
 
         val dbState = repository.workoutState.first()
         assertEquals(1, dbState.sessions.size)
-        assertEquals(800.0, dbState.sessions.first().totalVolume, 0.0)
+        assertEquals(
+            800.0,
+            com.example.goattracker.domain.WorkoutMetrics.sessionStrengthVolumeKg(dbState.sessions.first(), null),
+            0.0
+        )
     }
 
     @Test
