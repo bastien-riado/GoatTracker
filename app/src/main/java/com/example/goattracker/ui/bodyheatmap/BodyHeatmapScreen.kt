@@ -38,6 +38,7 @@ import com.example.goattracker.theme.*
 import io.github.sceneview.Scene
 import io.github.sceneview.SurfaceType
 import io.github.sceneview.math.Position
+import io.github.sceneview.math.Rotation
 import io.github.sceneview.model.ModelInstance
 import io.github.sceneview.rememberCameraNode
 import kotlin.math.roundToInt
@@ -79,15 +80,14 @@ fun BodyHeatmapScreen(
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Engine + loader + GLB bytes are app-scoped (see BodyModelAssets): opening this screen only
-    // creates a Model from the in-memory buffer, and leaving it never tears the engine down — so
-    // both the enter and the back-navigation stay jank-free.
-    val engine = remember { BodyModelAssets.engine(context) }
-    val modelLoader = remember { BodyModelAssets.modelLoader(context) }
-    val cameraNode = rememberCameraNode(engine) {
-        // Pulled back so the whole 1.8 m body sits clear of the floating UI at startup (the scene
-        // is full-screen now — adjust this distance to taste for the default framing).
-        position = Position(z = 4.2f)
+    // Engine, loaders, IBL environment, view/renderer and GLB bytes are app-scoped (see
+    // BodyModelAssets): opening this screen only creates a Model from the in-memory buffer and a
+    // camera, and leaving it never tears anything heavy down — so the model shows up immediately
+    // and back-navigation stays jank-free.
+    val shared = remember { BodyModelAssets.sceneResources(context) }
+    val cameraNode = rememberCameraNode(shared.engine) {
+        // Default framing distance for the 1.8 m body — lower = bigger model at startup.
+        position = Position(z = 3.4f)
     }
     val model = remember { BodyModelAssets.createModel(context) }
     DisposableEffect(model) {
@@ -131,12 +131,25 @@ fun BodyHeatmapScreen(
             // in lockstep with this screen instead of a SurfaceView lingering ~300ms over the
             // Profile page after back-navigation.
             surfaceType = SurfaceType.TextureSurface,
-            engine = engine,
-            modelLoader = modelLoader,
+            engine = shared.engine,
+            modelLoader = shared.modelLoader,
+            materialLoader = shared.materialLoader,
+            environmentLoader = shared.environmentLoader,
+            environment = shared.environment,
+            view = shared.view,
+            renderer = shared.renderer,
+            scene = shared.scene,
+            mainLightNode = shared.mainLight,
             cameraNode = cameraNode,
             // The default cameraManipulator provides 360° orbit + pinch-to-zoom.
         ) {
-            ModelNode(modelInstance = modelInstance, scaleToUnits = 1.8f)
+            // rotation 180°: the glTF export faces -Z, so without it the camera greets the user
+            // with the model's back.
+            ModelNode(
+                modelInstance = modelInstance,
+                scaleToUnits = 1.8f,
+                rotation = Rotation(y = 180f),
+            )
         }
 
         if (state.isLoading) {
