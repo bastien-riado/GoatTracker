@@ -1,5 +1,11 @@
 package com.example.goattracker.ui.bodyheatmap
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,7 +21,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -49,12 +54,16 @@ private fun applyHeatmap(
     instance: ModelInstance,
     statuses: Map<MuscleGroup, MuscleStatus>,
     selected: MuscleGroup?,
+    selectionPulse: Float = 0f,
 ) {
     instance.materialInstances.forEach { mi ->
         val group = MuscleGroup.fromId(mi.name)
         val base = if (group == null) MuscleHeatColor.NEUTRAL else MuscleHeatColor.forStatus(statuses[group])
-        // Brighten the selected muscle so it stands out.
-        val rgb = if (group != null && group == selected) MuscleHeatColor.lerp(base, Rgb(1f, 1f, 1f), 0.35f) else base
+        // The selected muscle pulses toward white (driven by selectionPulse 0..1) so the eye finds
+        // it immediately on the body.
+        val rgb = if (group != null && group == selected) {
+            MuscleHeatColor.lerp(base, Rgb(1f, 1f, 1f), 0.15f + 0.45f * selectionPulse)
+        } else base
         mi.setParameter("baseColorFactor", rgb.r, rgb.g, rgb.b, 1.0f)
     }
 }
@@ -76,7 +85,9 @@ fun BodyHeatmapScreen(
     val engine = remember { BodyModelAssets.engine(context) }
     val modelLoader = remember { BodyModelAssets.modelLoader(context) }
     val cameraNode = rememberCameraNode(engine) {
-        position = Position(z = 3.6f) // pulled back to frame the ~1.8 m body
+        // Pulled back so the whole 1.8 m body sits clear of the floating UI at startup (the scene
+        // is full-screen now — adjust this distance to taste for the default framing).
+        position = Position(z = 4.2f)
     }
     val model = remember { BodyModelAssets.createModel(context) }
     DisposableEffect(model) {
@@ -85,29 +96,37 @@ fun BodyHeatmapScreen(
     }
     val modelInstance: ModelInstance = model.instance
 
-    // Re-tint whenever the recovery data / selection changes.
+    // Oscillating highlight for the selected muscle. Reading the transition value only inside
+    // snapshotFlow keeps the per-frame work out of recomposition (just 17 material writes).
+    val pulse by rememberInfiniteTransition(label = "musclePulse").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(650, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "pulse",
+    )
+
+    // Re-tint whenever the recovery data / selection changes; while a muscle is selected, keep
+    // re-tinting every animation frame so its highlight pulses.
     LaunchedEffect(modelInstance, state.statuses, state.selected) {
-        applyHeatmap(modelInstance, state.statuses, state.selected)
+        if (state.selected == null) {
+            applyHeatmap(modelInstance, state.statuses, null)
+        } else {
+            snapshotFlow { pulse }.collect { p ->
+                applyHeatmap(modelInstance, state.statuses, state.selected, p)
+            }
+        }
     }
 
-    // Immersive edge-to-edge layout: no header, content draws behind the (transparent) status and
-    // navigation bars; the back button, legend and chips float over the black scene.
-    val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val navBarPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-
+    // Immersive edge-to-edge layout: the scene fills the whole screen, drawing behind the
+    // (transparent) status and navigation bars. Back arrow, legend and chips are foreground
+    // overlays — the model passes BEHIND them when rotated/zoomed, never gets clipped.
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black),
     ) {
         Scene(
-            // The scene viewport is padded down to the unobstructed middle of the screen (between
-            // the top legend row and the bottom chips), so the auto-centered model lands visually
-            // centered between the overlays. The viewport bounds stay invisible: the scene clear
-            // color and the screen background are both black.
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = statusBarPadding + 60.dp, bottom = navBarPadding + 72.dp),
+            modifier = Modifier.fillMaxSize(),
             // TextureSurface composites inline with the Compose tree, so the 3D view is removed
             // in lockstep with this screen instead of a SurfaceView lingering ~300ms over the
             // Profile page after back-navigation.
@@ -127,8 +146,8 @@ fun BodyHeatmapScreen(
             )
         }
 
-        // Floating back button (same circle style as the other screens' nav icon, plus a shadow
-        // so it reads as floating over the scene) with the legend beside it.
+        // Floating top row: bare white back arrow (no chip background — it aligns better with the
+        // legend over the black scene) and the recovery legend beside it.
         Row(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -138,16 +157,13 @@ fun BodyHeatmapScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            IconButton(
-                onClick = onBackClick,
-                modifier = Modifier
-                    .size(40.dp)
-                    .shadow(10.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(SurfaceElevated)
-                    .border(1.dp, Border, CircleShape),
-            ) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Retour", tint = Fg)
+            IconButton(onClick = onBackClick, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    Icons.Default.ArrowBack,
+                    contentDescription = "Retour",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp),
+                )
             }
             HeatLegend(modifier = Modifier.weight(1f))
         }
