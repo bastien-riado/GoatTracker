@@ -52,8 +52,6 @@ jobs:
             --no-daemon --stacktrace
 
       - name: Prepare artifacts (APK + checksum + version.json)
-        env:
-          NOTES: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
           APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n1)
@@ -63,8 +61,10 @@ jobs:
           VERSION_CODE=${{ github.run_number }}
           VERSION_NAME=1.0.${{ github.run_number }}
           APK_URL=https://github.com/${{ github.repository }}/releases/latest/download/goattracker-release.apk
-          # Patch notes shown in-app: commit message minus the Co-Authored-By trailer.
-          NOTES_CLEAN="$(printf '%s\n' "${NOTES:-$VERSION_NAME}" | sed '/^[Cc]o-[Aa]uthored-[Bb]y:/d')"
+          # Patch notes shown in-app: PATCH_NOTES.md, written for NON-TECHNICAL end users
+          # (features/fixes in plain French — never commit messages). Update it before every
+          # merge to master; falls back to the bare version name if missing/empty.
+          if [ -s PATCH_NOTES.md ]; then NOTES_CLEAN="$(cat PATCH_NOTES.md)"; else NOTES_CLEAN="$VERSION_NAME"; fi
           jq -n \
             --argjson versionCode "$VERSION_CODE" \
             --arg versionName "$VERSION_NAME" \
@@ -80,6 +80,7 @@ jobs:
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: v1.0.${{ github.run_number }}
+          body_path: PATCH_NOTES.md
           make_latest: true
           files: |
             goattracker-release.apk
