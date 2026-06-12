@@ -41,6 +41,18 @@ interface DataRepository {
     val bodyWeightHistory: Flow<List<BodyWeightEntry>>
 
     /**
+     * Per-muscle recovery-time overrides in hours, keyed by
+     * [com.example.goattracker.domain.model.MuscleGroup].name. Only explicit user overrides are
+     * stored — an absent key means "use the engine default", so the two default sources can never
+     * drift.
+     */
+    val muscleRecoveryOverrides: Flow<Map<String, Int>>
+
+    suspend fun saveMuscleRecoveryOverride(muscle: String, hours: Int)
+
+    suspend fun clearMuscleRecoveryOverride(muscle: String)
+
+    /**
      * Resolves an exercise by id, ARCHIVED ONES INCLUDED — unlike [WorkoutState.exercises], which
      * only carries the active catalog. Needed wherever a stored reference (template slot, history
      * row) must resolve even after the exercise left the catalog.

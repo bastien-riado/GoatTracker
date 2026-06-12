@@ -82,6 +82,17 @@ class FakeDataRepository(
     private val _bodyWeightHistory = MutableStateFlow<List<BodyWeightEntry>>(emptyList())
     override val bodyWeightHistory: Flow<List<BodyWeightEntry>> = _bodyWeightHistory.asStateFlow()
 
+    private val _muscleRecoveryOverrides = MutableStateFlow<Map<String, Int>>(emptyMap())
+    override val muscleRecoveryOverrides: Flow<Map<String, Int>> = _muscleRecoveryOverrides.asStateFlow()
+
+    override suspend fun saveMuscleRecoveryOverride(muscle: String, hours: Int) {
+        _muscleRecoveryOverrides.update { it + (muscle to hours) }
+    }
+
+    override suspend fun clearMuscleRecoveryOverride(muscle: String) {
+        _muscleRecoveryOverrides.update { it - muscle }
+    }
+
     private val _templates = MutableStateFlow<List<WorkoutTemplate>>(emptyList())
     override val templates: Flow<List<WorkoutTemplate>> = _templates.asStateFlow()
 

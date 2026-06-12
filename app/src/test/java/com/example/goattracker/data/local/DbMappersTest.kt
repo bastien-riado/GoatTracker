@@ -39,6 +39,29 @@ class DbMappersTest {
     }
 
     @Test
+    fun secondaryMuscles_roundTrip_atHalfContribution() {
+        val withSecondaries = benchPress.copy(secondaryMuscles = listOf("Triceps", "Épaules"))
+
+        val rows = withSecondaries.toMuscleRows()
+
+        assertEquals(3, rows.size)
+        assertEquals(1.0, rows.first { it.muscle == "Pectoraux" }.contribution, 0.0)
+        assertEquals(0.5, rows.first { it.muscle == "Triceps" }.contribution, 0.0)
+
+        val entity = withSecondaries.toEntity(isArchived = false, createdAt = 0L, updatedAt = 0L)
+        val rebuilt = entity.withMuscles(*rows.toTypedArray()).toDomain()
+        assertEquals("Pectoraux", rebuilt.primaryMuscle)
+        assertEquals(listOf("Triceps", "Épaules").sorted(), rebuilt.secondaryMuscles.sorted())
+    }
+
+    @Test
+    fun secondaryDuplicatingThePrimary_isDropped() {
+        val rows = benchPress.copy(secondaryMuscles = listOf("Pectoraux", "Triceps")).toMuscleRows()
+
+        assertEquals(listOf("Pectoraux", "Triceps"), rows.map { it.muscle })
+    }
+
+    @Test
     fun primaryMuscle_isTheHighestContributionRow() {
         val entity = benchPress.toEntity(isArchived = false, createdAt = 0L, updatedAt = 0L)
         val withSecondaries = entity.withMuscles(

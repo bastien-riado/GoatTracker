@@ -26,7 +26,13 @@ data class Exercise(
     val primaryMuscle: String,
     val trackingType: TrackingType,
     val notes: String = "",
-    val restTimeSeconds: Int = 90
+    val restTimeSeconds: Int = 90,
+    /**
+     * Muscles also worked, beyond [primaryMuscle] (same free-form vocabulary). They weigh half a
+     * primary in the recovery engine (see MuscleRecoveryCalculator); the DB schema stores
+     * arbitrary per-muscle contributions for a finer future model.
+     */
+    val secondaryMuscles: List<String> = emptyList()
 )
 
 enum class SetType(val displayName: String) {

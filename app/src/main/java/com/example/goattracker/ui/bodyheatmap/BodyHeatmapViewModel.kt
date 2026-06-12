@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -38,8 +39,15 @@ class BodyHeatmapViewModel(
     init {
         // Recovery is O(sessions x exercises x sets); compute off the main thread.
         viewModelScope.launch(defaultDispatcher) {
-            dataRepository.workoutState.collect { state ->
-                val statuses = calculator.compute(state.sessions, now())
+            combine(dataRepository.workoutState, dataRepository.muscleRecoveryOverrides) { state, overrides ->
+                calculator.compute(
+                    sessions = state.sessions,
+                    now = now(),
+                    recoveryHoursOverrides = overrides.mapNotNull { (name, hours) ->
+                        MuscleGroup.entries.firstOrNull { it.name == name }?.let { it to hours }
+                    }.toMap(),
+                )
+            }.collect { statuses ->
                 _uiState.update { it.copy(statuses = statuses, isLoading = false) }
             }
         }

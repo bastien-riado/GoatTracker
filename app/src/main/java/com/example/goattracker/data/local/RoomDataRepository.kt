@@ -173,6 +173,19 @@ class RoomDataRepository(
             }
         }
 
+    override val muscleRecoveryOverrides: Flow<Map<String, Int>> =
+        db.muscleRecoveryDao().observeAll().map { rows ->
+            rows.associate { it.muscle to it.recoveryHours }
+        }
+
+    override suspend fun saveMuscleRecoveryOverride(muscle: String, hours: Int) {
+        db.muscleRecoveryDao().upsert(MuscleRecoverySettingEntity(muscle = muscle, recoveryHours = hours))
+    }
+
+    override suspend fun clearMuscleRecoveryOverride(muscle: String) {
+        db.muscleRecoveryDao().delete(muscle)
+    }
+
     override suspend fun getExercise(exerciseId: String): Exercise? =
         db.exerciseDao().getWithMusclesById(exerciseId)?.toDomain()
 

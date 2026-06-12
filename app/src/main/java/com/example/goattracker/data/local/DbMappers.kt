@@ -1,5 +1,6 @@
 package com.example.goattracker.data.local
 
+import com.example.goattracker.domain.MuscleRecoveryCalculator
 import com.example.goattracker.domain.model.BodyWeightSource
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
@@ -26,17 +27,23 @@ private inline fun <reified E : Enum<E>> parseOr(name: String?, fallback: E): E 
 // ---------- Exercise ----------
 
 /** The primary muscle is the highest-contribution row; ties resolve by name for determinism. */
-fun ExerciseWithMuscles.toDomain(): Exercise = Exercise(
-    id = exercise.id,
-    name = exercise.name,
-    category = parseOr(exercise.category, ExerciseCategory.PUSH),
-    primaryMuscle = muscles.maxWithOrNull(
-        compareBy({ it.contribution }, { it.muscle })
-    )?.muscle ?: "",
-    trackingType = parseOr(exercise.trackingType, TrackingType.WEIGHT_REPS),
-    notes = exercise.notes,
-    restTimeSeconds = exercise.restTimeSeconds,
-)
+fun ExerciseWithMuscles.toDomain(): Exercise {
+    val primary = muscles.maxWithOrNull(compareBy({ it.contribution }, { it.muscle }))
+    return Exercise(
+        id = exercise.id,
+        name = exercise.name,
+        category = parseOr(exercise.category, ExerciseCategory.PUSH),
+        primaryMuscle = primary?.muscle ?: "",
+        trackingType = parseOr(exercise.trackingType, TrackingType.WEIGHT_REPS),
+        notes = exercise.notes,
+        restTimeSeconds = exercise.restTimeSeconds,
+        secondaryMuscles = muscles
+            .filter { it !== primary }
+            .sortedWith(compareByDescending<ExerciseMuscleEntity> { it.contribution }.thenBy { it.muscle })
+            .map { it.muscle },
+    )
+}
+
 
 fun Exercise.toEntity(isArchived: Boolean, createdAt: Long, updatedAt: Long): ExerciseEntity =
     ExerciseEntity(
@@ -51,10 +58,22 @@ fun Exercise.toEntity(isArchived: Boolean, createdAt: Long, updatedAt: Long): Ex
         updatedAt = updatedAt,
     )
 
-/** Phase 1 writes the single primary row (contribution 1.0); secondaries are a later feature. */
-fun Exercise.toMuscleRows(): List<ExerciseMuscleEntity> =
-    if (primaryMuscle.isBlank()) emptyList()
-    else listOf(ExerciseMuscleEntity(exerciseId = id, muscle = primaryMuscle, contribution = 1.0))
+fun Exercise.toMuscleRows(): List<ExerciseMuscleEntity> {
+    if (primaryMuscle.isBlank()) return emptyList()
+    val primaryRow = ExerciseMuscleEntity(exerciseId = id, muscle = primaryMuscle, contribution = 1.0)
+    val secondaryRows = secondaryMuscles
+        .filter { it.isNotBlank() && it != primaryMuscle }
+        .distinct()
+        .map {
+            ExerciseMuscleEntity(
+                exerciseId = id,
+                muscle = it,
+                // The engine's constant is the single source of truth for the v1 weight.
+                contribution = MuscleRecoveryCalculator.SECONDARY_CONTRIBUTION.toDouble(),
+            )
+        }
+    return listOf(primaryRow) + secondaryRows
+}
 
 // ---------- Session content ----------
 

@@ -59,6 +59,64 @@ class MuscleRecoveryCalculatorTest {
         assertTrue(chest.hasData)
     }
 
+    private fun benchWithSecondaries(endHoursAgo: Long, completedSets: Int): WorkoutSession {
+        val ex = Exercise(
+            name = "Développé Couché",
+            category = ExerciseCategory.PUSH,
+            primaryMuscle = "Pectoraux",
+            trackingType = TrackingType.WEIGHT_REPS,
+            secondaryMuscles = listOf("Triceps", "Épaules avant"),
+        )
+        val sets = (1..completedSets).map { WorkoutSet(setNumber = it, weight = 80.0, reps = 8, isCompleted = true) }
+        return WorkoutSession(
+            startTime = now - endHoursAgo * hour - hour,
+            endTime = now - endHoursAgo * hour,
+            name = "Push",
+            exercises = listOf(ExerciseSession(exercise = ex, sets = sets)),
+        )
+    }
+
+    @Test
+    fun secondaryMuscles_getHalfDoseAndHalfBase_soTheyRecoverFaster() {
+        // 4 sets, ended 26h ago.
+        // CHEST (primary):   window = 48*1.0 + 4*4.0 = 64h  -> 26/64
+        // TRICEPS (secondary): window = 48*0.5 + 4*2.0 = 32h -> 26/32
+        val statuses = calc.compute(listOf(benchWithSecondaries(endHoursAgo = 26, completedSets = 4)), now)
+
+        val chest = statuses.getValue(MuscleGroup.CHEST)
+        val triceps = statuses.getValue(MuscleGroup.TRICEPS)
+        val frontDelts = statuses.getValue(MuscleGroup.FRONT_DELTS)
+        assertEquals(26f / 64f, chest.recovery, 0.0001f)
+        assertEquals(26f / 32f, triceps.recovery, 0.0001f)
+        assertTrue(frontDelts.hasData) // "Épaules avant" mapped as a secondary too
+        assertEquals(2, triceps.recentSets) // ceil(4 × 0.5)
+        assertTrue("a secondary recovers faster than the primary", triceps.recovery > chest.recovery)
+    }
+
+    @Test
+    fun perMuscleOverride_replacesTheBaseWindow() {
+        // 3 sets ended 42h ago, override QUADS at 72h: window = 72 + 12 = 84h -> 42/84 = 0.5
+        // (default base would give 42/60 = 0.7).
+        val sessions = listOf(session(endHoursAgo = 42, muscle = "Quadriceps", completedSets = 3))
+
+        val withOverride = calc.compute(sessions, now, mapOf(MuscleGroup.QUADS to 72))
+        val withoutOverride = calc.compute(sessions, now)
+
+        assertEquals(0.5f, withOverride.getValue(MuscleGroup.QUADS).recovery, 0.0001f)
+        assertEquals(0.7f, withoutOverride.getValue(MuscleGroup.QUADS).recovery, 0.0001f)
+    }
+
+    @Test
+    fun overrideRaisesTheCap_soBigBasesAreNotClipped() {
+        // Override 96h + 12 sets: window = 96 + 48 = 144h (the default 96h cap must not clip it).
+        // Trained 72h ago -> 0.5.
+        val sessions = listOf(session(endHoursAgo = 72, muscle = "Dos", completedSets = 12))
+
+        val statuses = calc.compute(sessions, now, mapOf(MuscleGroup.LATS to 96))
+
+        assertEquals(0.5f, statuses.getValue(MuscleGroup.LATS).recovery, 0.0001f)
+    }
+
     @Test
     fun recoveryClampsToOneWhenFullyRested() {
         val statuses = calc.compute(listOf(session(endHoursAgo = 240, muscle = "Dos", completedSets = 2)), now)
