@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -44,7 +45,11 @@ sealed interface ExerciseDetailUiState {
         val volumeHistory: List<Double>,
         val volumeHistoryLabels: List<String>,
         val sessions: List<WorkoutSession>,
-        val lastExerciseSession: ExerciseSession? = null
+        val lastExerciseSession: ExerciseSession? = null,
+        /** Formula behind [estimatedOneRepMax]; user-switchable (Epley/Brzycki/Lander). */
+        val selectedFormula: OneRepMaxFormula = OneRepMaxFormula.EPLEY,
+        /** WEIGHT_REPS: best reps per weight tier, heaviest tiers first (see WorkoutMetrics). */
+        val repRecords: List<Pair<Double, Int>> = emptyList()
     ) : ExerciseDetailUiState
 }
 
@@ -66,10 +71,18 @@ class ExerciseDetailViewModel(
     @Volatile
     private var isDeleting = false
 
+    private val _selectedFormula = MutableStateFlow(OneRepMaxFormula.EPLEY)
+
+    fun selectFormula(formula: OneRepMaxFormula) {
+        _selectedFormula.value = formula
+    }
+
     init {
         // Heavy per-exercise aggregation; compute off the main thread.
         viewModelScope.launch(defaultDispatcher) {
-            dataRepository.workoutState.collectLatest { state ->
+            combine(dataRepository.workoutState, _selectedFormula) { state, formula ->
+                state to formula
+            }.collectLatest { (state, formula) ->
                 val exercise = state.exercises.firstOrNull { it.id == exerciseId }
                 if (exercise == null) {
                     // A delete we initiated is in flight; navigation is handled via deletedEvents.
@@ -104,8 +117,8 @@ class ExerciseDetailViewModel(
                     if (set.durationSeconds > maxDurationSeconds) maxDurationSeconds = set.durationSeconds
                     if (set.distanceKm > maxDistanceKm) maxDistanceKm = set.distanceKm
                     if (exercise.trackingType == TrackingType.WEIGHT_REPS && set.weight > 0 && set.reps > 0) {
-                        val epley1RM = OneRepMaxFormula.EPLEY.strategy.calculate(set.weight, set.reps)
-                        if (epley1RM > estimated1RM) estimated1RM = epley1RM
+                        val oneRm = formula.strategy.calculate(set.weight, set.reps)
+                        if (oneRm > estimated1RM) estimated1RM = oneRm
                     }
                     if (exercise.trackingType == TrackingType.DISTANCE) {
                         val pace = WorkoutMetrics.paceSecPerKm(set.durationSeconds, set.distanceKm)
@@ -139,7 +152,9 @@ class ExerciseDetailViewModel(
                     volumeHistory = last6.map { it.second },
                     volumeHistoryLabels = last6.map { dateFormat.format(Date(it.first.startTime)) },
                     sessions = exerciseSessions.sortedByDescending { it.startTime },
-                    lastExerciseSession = latest?.second
+                    lastExerciseSession = latest?.second,
+                    selectedFormula = formula,
+                    repRecords = WorkoutMetrics.repRecords(allCompletedSets)
                 )
             }
         }

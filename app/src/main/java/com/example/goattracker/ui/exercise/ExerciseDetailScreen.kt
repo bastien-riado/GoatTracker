@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.goattracker.data.local.RoomDataRepository
 import com.example.goattracker.domain.MetricFormatter
+import com.example.goattracker.domain.OneRepMaxFormula
+import com.example.goattracker.ui.create.SelectableTag
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.TrackingType
@@ -205,6 +207,7 @@ fun ExerciseDetailScreen(
                     collapseProgress = collapseProgress,
                     innerPadding = innerPadding,
                     onNotesChange = { viewModel.updateNotes(it) },
+                    onSelectFormula = { viewModel.selectFormula(it) },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -244,6 +247,7 @@ fun ExerciseDetailContentOverlay(
     collapseProgress: Float,
     innerPadding: PaddingValues,
     onNotesChange: (String) -> Unit,
+    onSelectFormula: (OneRepMaxFormula) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val exercise = state.exercise
@@ -357,7 +361,7 @@ fun ExerciseDetailContentOverlay(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SectionLabel(text = "Records personnels")
-                    RecordsGrid(exercise = exercise, state = state)
+                    RecordsGrid(exercise = exercise, state = state, onSelectFormula = onSelectFormula)
                 }
             }
 
@@ -709,7 +713,11 @@ fun SectionLabel(text: String) {
 }
 
 @Composable
-fun RecordsGrid(exercise: Exercise, state: ExerciseDetailUiState.Success) {
+fun RecordsGrid(
+    exercise: Exercise,
+    state: ExerciseDetailUiState.Success,
+    onSelectFormula: (OneRepMaxFormula) -> Unit = {},
+) {
     val unit = state.userProfile.weightUnit
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -749,7 +757,7 @@ fun RecordsGrid(exercise: Exercise, state: ExerciseDetailUiState.Success) {
                 TrackingType.WEIGHT_REPS -> CompactStatCard(
                     title = "1RM Estimé",
                     value = if (state.estimatedOneRepMax > 0) MetricFormatter.weight(state.estimatedOneRepMax, unit) else "--",
-                    description = "Force max théorique",
+                    description = "Formule ${state.selectedFormula.displayName}",
                     modifier = Modifier.weight(1f)
                 )
                 TrackingType.DISTANCE -> CompactStatCard(
@@ -767,12 +775,65 @@ fun RecordsGrid(exercise: Exercise, state: ExerciseDetailUiState.Success) {
             }
         }
 
+        // Formula switcher: the three estimators give honestly different numbers; let the user
+        // pick the one their references use.
+        if (exercise.trackingType == TrackingType.WEIGHT_REPS && state.estimatedOneRepMax > 0) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OneRepMaxFormula.entries.forEach { formula ->
+                    SelectableTag(
+                        text = formula.displayName,
+                        isSelected = state.selectedFormula == formula,
+                        onClick = { onSelectFormula(formula) }
+                    )
+                }
+            }
+        }
+
         CompactStatCard(
             title = "Volume Max sur une séance",
             value = MetricFormatter.progressionPoint(exercise.trackingType, state.maxSessionVolume, state.userProfile),
             description = "Meilleure performance globale sur une séance",
             modifier = Modifier.fillMaxWidth()
         )
+
+        // Rep records: the strength milestones the e1RM hides ("8 reps @ 100 kg").
+        if (exercise.trackingType == TrackingType.WEIGHT_REPS && state.repRecords.isNotEmpty()) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceElevated),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, BorderSoft, RoundedCornerShape(12.dp))
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "RECORDS DE RÉPÉTITIONS",
+                        color = Muted,
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                    )
+                    state.repRecords.forEach { (weightKg, reps) ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = MetricFormatter.weight(weightKg, unit),
+                                color = Accent,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.width(90.dp)
+                            )
+                            Text(
+                                text = "× $reps reps max",
+                                color = Fg,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Meilleures répétitions atteintes par charge",
+                        color = Muted,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp)
+                    )
+                }
+            }
+        }
 
         // Bodyweight volume needs the user's weight: nudge until it is set (one-line, non-blocking).
         if (exercise.trackingType == TrackingType.BODYWEIGHT_REPS && state.userProfile.bodyWeightKg == null) {
