@@ -38,6 +38,7 @@ import java.util.Locale
 @Composable
 fun SessionsListScreen(
     onBackClick: () -> Unit,
+    onSessionClick: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -178,7 +179,8 @@ fun SessionsListScreen(
                             session = session,
                             userProfile = userProfile,
                             dateFormat = dateFormat,
-                            onDeleteClick = { sessionToDelete = session }
+                            onDeleteClick = { sessionToDelete = session },
+                            onClick = { onSessionClick(session.id) }
                         )
                     }
                 }
@@ -240,6 +242,7 @@ fun SessionItemCard(
     userProfile: UserProfile,
     dateFormat: SimpleDateFormat,
     onDeleteClick: () -> Unit,
+    onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val dateStr = remember(session.startTime) {
@@ -258,6 +261,7 @@ fun SessionItemCard(
         modifier = modifier
             .fillMaxWidth()
             .border(1.dp, BorderSoft, RoundedCornerShape(12.dp))
+            .clickable { onClick() }
     ) {
         Column(
             modifier = Modifier

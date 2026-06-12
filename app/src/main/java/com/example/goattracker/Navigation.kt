@@ -48,6 +48,7 @@ import com.example.goattracker.ui.bodyheatmap.BodyHeatmapScreen
 import com.example.goattracker.ui.exercise.ExerciseDetailScreen
 import com.example.goattracker.ui.settings.SettingsScreen
 import com.example.goattracker.ui.settings.PatchNotesScreen
+import com.example.goattracker.ui.sessiondetail.SessionDetailScreen
 import com.example.goattracker.ui.templates.TemplateEditorScreen
 import com.example.goattracker.ui.templates.TemplatesScreen
 
@@ -174,7 +175,17 @@ fun MainNavigation() {
           )
         }
         entry<SessionsList> {
-          SessionsListScreen(onBackClick = { backStack.removeLastOrNull() })
+          SessionsListScreen(
+            onBackClick = { backStack.removeLastOrNull() },
+            onSessionClick = { id -> backStack.add(SessionDetail(id)) }
+          )
+        }
+        entry<SessionDetail> { key ->
+          SessionDetailScreen(
+            sessionId = key.sessionId,
+            onBackClick = { backStack.removeLastOrNull() },
+            onExerciseClick = { id -> backStack.add(ExerciseDetail(id)) }
+          )
         }
         entry<BodyHeatmap> {
           BodyHeatmapScreen(onBackClick = { backStack.removeLastOrNull() })
