@@ -38,7 +38,9 @@ class TemplateLauncherTest {
         assertEquals(2, draft.exercises.size)
         assertEquals(3, draft.exercises[0].sets.size)
         assertEquals(80.0, draft.exercises[0].sets[0].weight, 0.0)
-        assertTrue(draft.exercises[1].sets.all { it.isToFailure })
+        // AMRAP = only the LAST set of the slot is the failure set.
+        assertFalse(draft.exercises[1].sets.first().isToFailure)
+        assertTrue(draft.exercises[1].sets.last().isToFailure)
         assertTrue(draft.exercises.flatMap { it.sets }.none { it.isCompleted })
     }
 

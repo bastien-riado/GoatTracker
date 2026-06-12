@@ -5,8 +5,12 @@ import java.util.UUID
 enum class TemplateTargetMode(val displayName: String) {
     REPS("Répétitions"),
 
-    /** As many reps as possible: no rep target, the set is planned to be taken to failure. */
-    AMRAP("Max (à l'échec)")
+    /**
+     * The LAST set of the slot is done to failure (no rep target on it); the sets before follow
+     * the regular reps/weight targets. Failure is a per-set notion — "2 séries classiques + 1 à
+     * l'échec" — not a per-exercise one.
+     */
+    AMRAP("Dernière série à l'échec")
 }
 
 /**
@@ -39,7 +43,8 @@ data class WorkoutTemplate(
  *
  * - Target sets are pre-created INCOMPLETE with the target weight/reps filled in, so the user
  *   checks sets off (adjusting values where reality differed) instead of building the session.
- * - AMRAP slots map to sets flagged [WorkoutSet.isToFailure] with no rep target.
+ * - AMRAP slots flag their LAST set [WorkoutSet.isToFailure] with no rep target on it; the sets
+ *   before keep the regular targets (failure is per-set: "2 classiques + 1 à l'échec").
  * - A rest override rides the session's embedded exercise copy ([Exercise.restTimeSeconds]), so
  *   the live rest timer honors it without knowing templates exist.
  * - Slots whose exercise cannot be resolved (defensive: RESTRICT keys + archiving should make
@@ -55,15 +60,17 @@ fun WorkoutTemplate.toDraftSession(
         val effective = entry.restOverrideSeconds
             ?.let { exercise.copy(restTimeSeconds = it) } ?: exercise
         val isAmrap = entry.targetMode == TemplateTargetMode.AMRAP
+        val setCount = entry.targetSets.coerceAtLeast(1)
         ExerciseSession(
             exercise = effective,
-            sets = (1..entry.targetSets.coerceAtLeast(1)).map { number ->
+            sets = (1..setCount).map { number ->
+                val isFailureSet = isAmrap && number == setCount
                 WorkoutSet(
                     setNumber = number,
                     weight = entry.targetWeightKg ?: 0.0,
-                    reps = if (isAmrap) 0 else entry.targetReps ?: 0,
+                    reps = if (isFailureSet) 0 else entry.targetReps ?: 0,
                     isCompleted = false,
-                    isToFailure = isAmrap,
+                    isToFailure = isFailureSet,
                 )
             },
         )

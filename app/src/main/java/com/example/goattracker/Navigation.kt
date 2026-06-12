@@ -178,7 +178,8 @@ fun MainNavigation() {
         entry<TemplateEditor> { key ->
           TemplateEditorScreen(
             templateId = key.templateId,
-            onBackClick = { backStack.removeLastOrNull() }
+            onBackClick = { backStack.removeLastOrNull() },
+            onCreateExercise = { backStack.add(CreateExercise()) }
           )
         }
         entry<SessionsList> {

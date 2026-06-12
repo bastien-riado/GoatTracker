@@ -41,6 +41,7 @@ import com.example.goattracker.domain.model.*
 import com.example.goattracker.theme.*
 import com.example.goattracker.ui.components.AppNumberField
 import com.example.goattracker.ui.components.AppTextField
+import com.example.goattracker.ui.components.ExercisePickerDialog
 import com.example.goattracker.ui.main.CategoryChip
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -474,158 +475,23 @@ fun LiveWorkoutScreen(
         }
     }
 
-    // ========== EXERCISE PICKER DIALOG (unchanged) ==========
+    // ========== EXERCISE PICKER DIALOG (shared component, see ui/components) ==========
     if (state.isExercisePickerOpen) {
-        Dialog(
-            onDismissRequest = { viewModel.setExercisePickerOpen(false) },
-            // decorFitsSystemWindows = false lets imePadding() react to the keyboard inside the
-            // dialog window so the list/search rise above it; usePlatformDefaultWidth = false lets
-            // us control the width ourselves.
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
-            )
-        ) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Surface),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .fillMaxHeight(0.85f)
-                    .border(1.dp, Border, RoundedCornerShape(16.dp))
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .imePadding()
-                        .padding(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Ajouter un exercice",
-                            color = Fg,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        IconButton(onClick = { viewModel.setExercisePickerOpen(false) }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Fg)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    var pickerSearchQuery by remember { mutableStateOf("") }
-                    var pickerCategoryFilter by remember { mutableStateOf<ExerciseCategory?>(null) }
-
-                    AppTextField(
-                        value = pickerSearchQuery,
-                        onValueChange = { pickerSearchQuery = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = "Rechercher un exercice...",
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Muted) },
-                        capitalization = KeyboardCapitalization.None,
-                        containerColor = SurfaceElevated
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        CategoryChip(
-                            text = "Tous",
-                            isSelected = pickerCategoryFilter == null,
-                            onClick = { pickerCategoryFilter = null }
-                        )
-                        ExerciseCategory.values().forEach { category ->
-                            CategoryChip(
-                                text = category.displayName,
-                                isSelected = pickerCategoryFilter == category,
-                                onClick = { pickerCategoryFilter = category }
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Create a brand-new exercise without leaving the session: navigates to the full
-                    // create screen; on save we return here and the new exercise is auto-added.
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.prepareAutoAddOnReturn()
-                            viewModel.setExercisePickerOpen(false)
-                            onCreateExercise()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                        border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
-                            brush = Brush.linearGradient(listOf(Accent, Accent))
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = Accent)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Créer un nouvel exercice", color = Accent, fontWeight = FontWeight.Bold)
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    val filteredPickerList = state.availableExercises.filter { exercise ->
-                        val matchesQuery = exercise.name.contains(pickerSearchQuery, ignoreCase = true) ||
-                                exercise.primaryMuscle.contains(pickerSearchQuery, ignoreCase = true)
-                        val matchesCategory = pickerCategoryFilter == null || exercise.category == pickerCategoryFilter
-                        matchesQuery && matchesCategory
-                    }
-
-                    if (filteredPickerList.isEmpty()) {
-                        Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            Text("Aucun exercice trouvé", color = Muted)
-                        }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(filteredPickerList) { exercise ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(SurfaceElevated)
-                                        .border(1.dp, BorderSoft, RoundedCornerShape(8.dp))
-                                        .clickable {
-                                            viewModel.addExerciseToSession(exercise)
-                                            viewModel.setExercisePickerOpen(false)
-                                        }
-                                        .padding(12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(exercise.name, color = Fg, fontWeight = FontWeight.Bold)
-                                        Text(
-                                            text = "${exercise.category.displayName} • ${exercise.primaryMuscle}",
-                                            color = Muted,
-                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp)
-                                        )
-                                    }
-                                    Icon(Icons.Default.Add, contentDescription = "Add", tint = Accent)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        ExercisePickerDialog(
+            exercises = state.availableExercises,
+            onPick = { exercise ->
+                viewModel.addExerciseToSession(exercise)
+                viewModel.setExercisePickerOpen(false)
+            },
+            onDismiss = { viewModel.setExercisePickerOpen(false) },
+            // Create a brand-new exercise without leaving the session: navigates to the full
+            // create screen; on save we return here and the new exercise is auto-added.
+            onCreateExercise = {
+                viewModel.prepareAutoAddOnReturn()
+                viewModel.setExercisePickerOpen(false)
+                onCreateExercise()
+            },
+        )
     }
 }
 

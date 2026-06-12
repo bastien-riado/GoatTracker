@@ -153,7 +153,9 @@ class TemplateEditorViewModel(
                     id = row.entryId,
                     exerciseId = row.exercise.id,
                     targetSets = row.setsText.toIntOrNull()?.coerceIn(1, 20) ?: 3,
-                    targetReps = if (row.isAmrap) null else row.repsText.toIntOrNull(),
+                    // Reps stay even in AMRAP mode: they target the regular sets; only the LAST
+                    // set is done to failure (see toDraftSession).
+                    targetReps = row.repsText.toIntOrNull(),
                     targetWeightKg = row.weightText.replace(',', '.').toDoubleOrNull()
                         ?.let { state.weightUnit.toKg(it) },
                     targetMode = if (row.isAmrap) TemplateTargetMode.AMRAP else TemplateTargetMode.REPS,

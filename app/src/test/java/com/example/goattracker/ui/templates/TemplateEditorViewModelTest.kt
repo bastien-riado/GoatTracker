@@ -61,7 +61,7 @@ class TemplateEditorViewModelTest {
     }
 
     @Test
-    fun amrapToggle_savesAmrapWithoutRepTarget() = runTest {
+    fun amrapToggle_savesTheMode_andKeepsRepsForTheRegularSets() = runTest {
         val repository = FakeDataRepository()
         val bench = repository.workoutState.first().exercises.first()
         val viewModel = TemplateEditorViewModel(repository, templateId = null)
@@ -73,7 +73,8 @@ class TemplateEditorViewModelTest {
 
         val entry = repository.templates.first { it.isNotEmpty() }.single().entries.single()
         assertEquals(TemplateTargetMode.AMRAP, entry.targetMode)
-        assertNull(entry.targetReps)
+        // Reps stay: they target the regular sets; only the last set is done to failure.
+        assertEquals(10, entry.targetReps)
     }
 
     @Test

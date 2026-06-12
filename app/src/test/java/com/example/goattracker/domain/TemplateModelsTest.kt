@@ -57,15 +57,35 @@ class TemplateModelsTest {
     }
 
     @Test
-    fun amrapSlots_becomeToFailureSets_withoutRepTarget() {
-        val draft = pushTemplate.toDraftSession(catalog::get, now = 0L)
+    fun amrapSlots_flagOnlyTheirLastSetToFailure() {
+        // Failure is a per-set notion: "2 séries classiques + 1 à l'échec".
+        val template = WorkoutTemplate(
+            name = "Push",
+            entries = listOf(
+                TemplateEntry(
+                    exerciseId = bench.id,
+                    targetSets = 3,
+                    targetReps = 10,
+                    targetWeightKg = 80.0,
+                    targetMode = TemplateTargetMode.AMRAP,
+                )
+            ),
+        )
 
-        val dipsSets = draft.exercises[1].sets
-        assertEquals(2, dipsSets.size)
-        assertTrue(dipsSets.all { it.isToFailure })
-        assertTrue(dipsSets.all { it.reps == 0 })
-        // The non-AMRAP exercise stays a plain target.
-        assertFalse(draft.exercises[0].sets.any { it.isToFailure })
+        val sets = template.toDraftSession(catalog::get, now = 0L).exercises.single().sets
+
+        assertEquals(3, sets.size)
+        // Regular sets keep their targets…
+        assertEquals(listOf(10, 10), sets.take(2).map { it.reps })
+        assertFalse(sets.take(2).any { it.isToFailure })
+        // …only the last one is the failure set (no rep target, weight still prefilled).
+        assertTrue(sets.last().isToFailure)
+        assertEquals(0, sets.last().reps)
+        assertEquals(80.0, sets.last().weight, 0.0)
+
+        // The non-AMRAP exercise of the shared fixture stays a plain target.
+        val plain = pushTemplate.toDraftSession(catalog::get, now = 0L)
+        assertFalse(plain.exercises[0].sets.any { it.isToFailure })
     }
 
     @Test

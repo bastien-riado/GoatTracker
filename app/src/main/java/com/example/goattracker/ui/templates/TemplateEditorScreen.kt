@@ -59,6 +59,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.goattracker.data.local.RoomDataRepository
+import com.example.goattracker.theme.Accent
 import com.example.goattracker.theme.Bg
 import com.example.goattracker.theme.Border
 import com.example.goattracker.theme.BorderSoft
@@ -67,8 +68,10 @@ import com.example.goattracker.theme.Muted
 import com.example.goattracker.theme.PremiumGradient
 import com.example.goattracker.theme.Surface
 import com.example.goattracker.theme.SurfaceElevated
+import androidx.compose.ui.draw.clip
 import com.example.goattracker.ui.components.AppNumberField
 import com.example.goattracker.ui.components.AppTextField
+import com.example.goattracker.ui.components.ExercisePickerDialog
 import com.example.goattracker.ui.create.FormLabel
 import com.example.goattracker.ui.create.SelectableTag
 
@@ -77,6 +80,7 @@ import com.example.goattracker.ui.create.SelectableTag
 fun TemplateEditorScreen(
     templateId: String? = null,
     onBackClick: () -> Unit,
+    onCreateExercise: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -213,40 +217,20 @@ fun TemplateEditorScreen(
         }
     }
 
+    // Same picker modal as the live session's "Ajouter un exercice" — one muscle memory app-wide.
     if (showExercisePicker) {
-        ModalBottomSheet(
-            onDismissRequest = { showExercisePicker = false },
-            containerColor = Surface
-        ) {
-            Column(modifier = Modifier.padding(bottom = 24.dp)) {
-                Text(
-                    text = "AJOUTER UN EXERCICE",
-                    color = Muted,
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                )
-                LazyColumn {
-                    items(state.availableExercises, key = { it.id }) { exercise ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.addExercise(exercise)
-                                    showExercisePicker = false
-                                }
-                                .padding(horizontal = 20.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(exercise.name, color = Fg, fontWeight = FontWeight.SemiBold)
-                                Text(exercise.primaryMuscle, color = Muted, fontSize = 12.sp)
-                            }
-                            Icon(Icons.Default.Add, contentDescription = null, tint = Muted, modifier = Modifier.size(18.dp))
-                        }
-                    }
-                }
-            }
-        }
+        ExercisePickerDialog(
+            exercises = state.availableExercises,
+            onPick = { exercise ->
+                viewModel.addExercise(exercise)
+                showExercisePicker = false
+            },
+            onDismiss = { showExercisePicker = false },
+            onCreateExercise = {
+                showExercisePicker = false
+                onCreateExercise()
+            },
+        )
     }
 }
 
@@ -297,60 +281,62 @@ private fun EditorRowCard(
                 }
             }
 
-            Row(
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
                     FormLabel(text = "Séries")
                     AppNumberField(
                         value = row.setsText,
                         onValueChange = onSetsChange,
-                        modifier = Modifier.width(64.dp)
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
                 if (row.showsRepTargets) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
                         FormLabel(text = "Reps")
-                        if (row.isAmrap) {
-                            Box(
-                                modifier = Modifier
-                                    .width(64.dp)
-                                    .height(40.dp)
-                                    .background(Surface, RoundedCornerShape(8.dp))
-                                    .border(1.dp, BorderSoft, RoundedCornerShape(8.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("MAX", color = Muted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                        } else {
-                            AppNumberField(
-                                value = row.repsText,
-                                onValueChange = onRepsChange,
-                                modifier = Modifier.width(64.dp)
-                            )
-                        }
+                        AppNumberField(
+                            value = row.repsText,
+                            onValueChange = onRepsChange,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
                 if (row.showsWeightTarget) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
                         FormLabel(text = "Poids ($weightSuffix)")
                         AppNumberField(
                             value = row.weightText,
                             onValueChange = onWeightChange,
-                            modifier = Modifier.width(80.dp),
+                            modifier = Modifier.fillMaxWidth(),
                             keyboardType = KeyboardType.Decimal
                         )
                     }
                 }
-                if (row.showsRepTargets) {
-                    Box(modifier = Modifier.padding(bottom = 4.dp)) {
-                        SelectableTag(
-                            text = "À l'échec",
-                            isSelected = row.isAmrap,
-                            onClick = onToggleAmrap
+            }
+
+            // Failure applies to ONE set, not the exercise: N-1 sets follow the reps/weight targets
+            // above, the LAST one is done to failure (reps left open at launch).
+            if (row.showsRepTargets) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (row.isAmrap) Accent.copy(alpha = 0.15f) else Surface)
+                        .border(
+                            width = 1.dp,
+                            color = if (row.isAmrap) Accent else BorderSoft,
+                            shape = RoundedCornerShape(8.dp)
                         )
-                    }
+                        .clickable { onToggleAmrap() }
+                        .padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (row.isAmrap) "✓ Dernière série à l'échec" else "Dernière série à l'échec",
+                        color = if (row.isAmrap) Accent else Fg,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }

@@ -22,15 +22,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -110,6 +113,30 @@ fun TemplatesScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface, titleContentColor = Fg)
             )
         },
+        floatingActionButton = {
+            // Create lives in the FAB once at least one workout exists (the home-screen idiom);
+            // the empty state keeps its full CTA. Bottom padding clears the docked mini-player.
+            if (items.isNotEmpty()) {
+                FloatingActionButton(
+                    onClick = onCreateClick,
+                    containerColor = Color.Transparent,
+                    elevation = FloatingActionButtonDefaults.elevation(0.dp),
+                    modifier = Modifier
+                        .padding(bottom = if (hasActiveSession) 80.dp else 0.dp)
+                        .size(56.dp)
+                        .border(1.dp, Border, CircleShape)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(PremiumGradient, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Créer un workout", tint = Fg, modifier = Modifier.size(28.dp))
+                    }
+                }
+            }
+        },
         containerColor = Bg
     ) { innerPadding ->
         LazyColumn(
@@ -139,6 +166,34 @@ fun TemplatesScreen(
                             fontSize = 13.sp,
                             modifier = Modifier.padding(horizontal = 24.dp)
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = onCreateClick,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .border(1.dp, Border, RoundedCornerShape(12.dp)),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                            contentPadding = PaddingValues(0.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(PremiumGradient),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Add, contentDescription = null, tint = Fg, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Créer un workout",
+                                        color = Fg,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -151,36 +206,6 @@ fun TemplatesScreen(
                     onEdit = { onEditClick(item.template.id) },
                     onDelete = { templateToDelete = item.template },
                 )
-            }
-
-            item {
-                Button(
-                    onClick = onCreateClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .border(1.dp, Border, RoundedCornerShape(12.dp)),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                    contentPadding = PaddingValues(0.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(PremiumGradient),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Add, contentDescription = null, tint = Fg, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Créer un workout",
-                                color = Fg,
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                        }
-                    }
-                }
             }
 
             // Clearance for the session mini-player docked by the navigation root.
@@ -230,7 +255,7 @@ private fun TemplateCard(
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -238,20 +263,39 @@ private fun TemplateCard(
                         color = Fg,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
+                    // Full exercise list, wrapped — the card IS the workout's description.
                     Text(
                         text = "${item.exerciseNames.size} exercice${if (item.exerciseNames.size > 1) "s" else ""}" +
                             if (item.exerciseNames.isEmpty()) "" else " · " + item.exerciseNames.joinToString(", "),
                         color = Muted,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        fontSize = 12.sp
                     )
                 }
-                IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.Edit, contentDescription = "Modifier", tint = Muted, modifier = Modifier.size(18.dp))
-                }
-                IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.Delete, contentDescription = "Supprimer", tint = Muted, modifier = Modifier.size(18.dp))
+                Box {
+                    var menuOpen by remember { mutableStateOf(false) }
+                    IconButton(onClick = { menuOpen = true }, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Options", tint = Muted, modifier = Modifier.size(20.dp))
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false },
+                        modifier = Modifier.background(SurfaceElevated)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Modifier", color = Fg) },
+                            onClick = {
+                                menuOpen = false
+                                onEdit()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Supprimer", color = Fg) },
+                            onClick = {
+                                menuOpen = false
+                                onDelete()
+                            }
+                        )
+                    }
                 }
             }
 
