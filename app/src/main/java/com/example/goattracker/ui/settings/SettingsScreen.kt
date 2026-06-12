@@ -55,7 +55,7 @@ import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.local.RoomDataRepository
 import com.example.goattracker.domain.MetricFormatter
 import com.example.goattracker.domain.model.BodyWeightSource
 import com.example.goattracker.domain.model.WeightUnit
@@ -87,7 +87,7 @@ fun SettingsScreen(
 
     val context = LocalContext.current
     val settingsVm: SettingsViewModel = viewModel {
-        val repository = DefaultDataRepository.getInstance(context.filesDir)
+        val repository = RoomDataRepository.getInstance(context)
         SettingsViewModel(
             dataRepository = repository,
             syncer = BodyWeightSyncer(HealthConnectWeightProvider(context.applicationContext), repository),

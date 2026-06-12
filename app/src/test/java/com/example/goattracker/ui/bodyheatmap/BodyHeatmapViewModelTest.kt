@@ -1,7 +1,7 @@
 package com.example.goattracker.ui.bodyheatmap
 
 import com.example.goattracker.MainDispatcherRule
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.FakeDataRepository
 import com.example.goattracker.domain.MuscleRecoveryCalculator
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
@@ -11,7 +11,6 @@ import com.example.goattracker.domain.model.TrackingType
 import com.example.goattracker.domain.model.WorkoutSession
 import com.example.goattracker.domain.model.WorkoutSet
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -43,7 +42,7 @@ class BodyHeatmapViewModelTest {
     @Test
     fun computesRecoveryForTrainedMuscles_andNeutralForUntrained() = runTest {
         val td = UnconfinedTestDispatcher(testScheduler)
-        val repo = DefaultDataRepository(storageDir = null, dispatcher = td, scope = TestScope(td))
+        val repo = FakeDataRepository()
         repo.addWorkoutSession(chestSessionEndedHoursAgo(6))
         val vm = BodyHeatmapViewModel(repo, MuscleRecoveryCalculator(), td, now = { now })
 
@@ -59,7 +58,7 @@ class BodyHeatmapViewModelTest {
     @Test
     fun selectTogglesSelection() = runTest {
         val td = UnconfinedTestDispatcher(testScheduler)
-        val repo = DefaultDataRepository(storageDir = null, dispatcher = td, scope = TestScope(td))
+        val repo = FakeDataRepository()
         repo.addWorkoutSession(chestSessionEndedHoursAgo(6))
         val vm = BodyHeatmapViewModel(repo, MuscleRecoveryCalculator(), td, now = { now })
 

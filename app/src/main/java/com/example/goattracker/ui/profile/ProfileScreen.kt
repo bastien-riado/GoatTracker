@@ -37,7 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.local.RoomDataRepository
 import com.example.goattracker.domain.MetricFormatter
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.WeightUnit
@@ -60,7 +60,7 @@ fun ProfileScreen(
 ) {
     val context = LocalContext.current
     val viewModel: ProfileViewModel = viewModel {
-        ProfileViewModel(DefaultDataRepository.getInstance(context.filesDir))
+        ProfileViewModel(RoomDataRepository.getInstance(context))
     }
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()

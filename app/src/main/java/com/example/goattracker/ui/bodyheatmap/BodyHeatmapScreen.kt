@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.local.RoomDataRepository
 import com.example.goattracker.domain.MuscleHeatColor
 import com.example.goattracker.domain.MuscleStatus
 import com.example.goattracker.domain.Rgb
@@ -76,7 +76,7 @@ fun BodyHeatmapScreen(
 ) {
     val context = LocalContext.current
     val viewModel: BodyHeatmapViewModel = viewModel {
-        BodyHeatmapViewModel(DefaultDataRepository.getInstance(context.filesDir))
+        BodyHeatmapViewModel(RoomDataRepository.getInstance(context))
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 

@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.local.RoomDataRepository
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.ui.components.AppTextField
 import com.example.goattracker.domain.model.ExerciseCategory
@@ -59,7 +59,7 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val viewModel: MainScreenViewModel = viewModel { 
-        MainScreenViewModel(DefaultDataRepository.getInstance(context.filesDir)) 
+        MainScreenViewModel(RoomDataRepository.getInstance(context))
     }
     
     val state by viewModel.uiState.collectAsStateWithLifecycle()

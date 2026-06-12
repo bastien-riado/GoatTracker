@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.local.RoomDataRepository
 import com.example.goattracker.domain.MetricFormatter
 import com.example.goattracker.domain.model.*
 import com.example.goattracker.theme.*
@@ -55,7 +55,7 @@ fun LiveWorkoutScreen(
 
     val viewModel: LiveWorkoutViewModel = viewModel {
         LiveWorkoutViewModel(
-            dataRepository = DefaultDataRepository.getInstance(context.filesDir),
+            dataRepository = RoomDataRepository.getInstance(context),
             restTimer = AndroidRestTimer(context)
         )
     }

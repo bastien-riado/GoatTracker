@@ -1,11 +1,9 @@
 package com.example.goattracker.health
 
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.FakeDataRepository
 import com.example.goattracker.domain.model.BodyWeightSource
 import com.example.goattracker.domain.model.UserProfile
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -24,10 +22,7 @@ class BodyWeightSyncerTest {
         override suspend fun readLatestWeight(): BodyWeightReading? = reading
     }
 
-    private fun TestScope.repository(): DefaultDataRepository {
-        val td = UnconfinedTestDispatcher(testScheduler)
-        return DefaultDataRepository(storageDir = null, dispatcher = td, scope = TestScope(td))
-    }
+    private fun repository(): FakeDataRepository = FakeDataRepository()
 
     @Test
     fun sync_disabled_doesNothing() = runTest {

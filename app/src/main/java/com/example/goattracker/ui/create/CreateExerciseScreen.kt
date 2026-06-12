@@ -22,7 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.local.RoomDataRepository
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.TrackingType
 import com.example.goattracker.theme.*
@@ -38,7 +38,7 @@ fun CreateExerciseScreen(
     val context = LocalContext.current
     val uniqueKey = remember(exerciseId) { exerciseId ?: java.util.UUID.randomUUID().toString() }
     val viewModel: CreateExerciseViewModel = viewModel(key = uniqueKey) {
-        CreateExerciseViewModel(DefaultDataRepository.getInstance(context.filesDir), exerciseId)
+        CreateExerciseViewModel(RoomDataRepository.getInstance(context), exerciseId)
     }
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()

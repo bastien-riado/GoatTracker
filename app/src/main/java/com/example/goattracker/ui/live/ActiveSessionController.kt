@@ -2,7 +2,7 @@ package com.example.goattracker.ui.live
 
 import android.content.Context
 import com.example.goattracker.data.DataRepository
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.local.RoomDataRepository
 import com.example.goattracker.domain.model.WorkoutSession
 import com.example.goattracker.domain.model.toFinishedOrNull
 import kotlinx.coroutines.CoroutineScope
@@ -203,7 +203,7 @@ class ActiveSessionController(
 
         private fun build(appContext: Context): ActiveSessionController =
             ActiveSessionController(
-                repository = DefaultDataRepository.getInstance(appContext.filesDir),
+                repository = RoomDataRepository.getInstance(appContext),
                 restTimer = AndroidRestTimer(appContext),
                 service = AndroidSessionServiceController(appContext),
                 scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),

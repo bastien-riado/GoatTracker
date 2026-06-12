@@ -24,7 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.local.RoomDataRepository
 import com.example.goattracker.domain.MetricFormatter
 import com.example.goattracker.domain.WorkoutMetrics
 import com.example.goattracker.domain.model.UserProfile
@@ -42,7 +42,7 @@ fun SessionsListScreen(
 ) {
     val context = LocalContext.current
     val viewModel: SessionsListViewModel = viewModel {
-        SessionsListViewModel(DefaultDataRepository.getInstance(context.filesDir))
+        SessionsListViewModel(RoomDataRepository.getInstance(context))
     }
 
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()

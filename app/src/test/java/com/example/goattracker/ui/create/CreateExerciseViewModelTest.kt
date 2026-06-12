@@ -1,12 +1,10 @@
 package com.example.goattracker.ui.create
 
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.FakeDataRepository
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.TrackingType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import com.example.goattracker.MainDispatcherRule
@@ -22,9 +20,7 @@ class CreateExerciseViewModelTest {
 
     @Test
     fun viewModel_initialState_isInvalid() = runTest {
-        val testDispatcher = UnconfinedTestDispatcher(testScheduler)
-        val testScope = TestScope(testDispatcher)
-        val repository = DefaultDataRepository(storageDir = null, dispatcher = testDispatcher, scope = testScope)
+        val repository = FakeDataRepository()
         val viewModel = CreateExerciseViewModel(repository)
 
         val state = viewModel.uiState.value
@@ -37,9 +33,7 @@ class CreateExerciseViewModelTest {
 
     @Test
     fun viewModel_updatingFields_correctlyValidatesAndEnablesSave() = runTest {
-        val testDispatcher = UnconfinedTestDispatcher(testScheduler)
-        val testScope = TestScope(testDispatcher)
-        val repository = DefaultDataRepository(storageDir = null, dispatcher = testDispatcher, scope = testScope)
+        val repository = FakeDataRepository()
         val viewModel = CreateExerciseViewModel(repository)
 
         // 1. Enter blank name
@@ -60,9 +54,7 @@ class CreateExerciseViewModelTest {
 
     @Test
     fun viewModel_saveExercise_callsRepositoryAndSetsSavedFlag() = runTest {
-        val testDispatcher = UnconfinedTestDispatcher(testScheduler)
-        val testScope = TestScope(testDispatcher)
-        val repository = DefaultDataRepository(storageDir = null, dispatcher = testDispatcher, scope = testScope)
+        val repository = FakeDataRepository()
         val viewModel = CreateExerciseViewModel(repository)
 
         // Set inputs

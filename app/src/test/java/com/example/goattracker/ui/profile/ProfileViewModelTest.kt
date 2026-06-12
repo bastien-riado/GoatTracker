@@ -1,10 +1,9 @@
 package com.example.goattracker.ui.profile
 
 import com.example.goattracker.MainDispatcherRule
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.FakeDataRepository
 import com.example.goattracker.domain.model.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -37,8 +36,7 @@ class ProfileViewModelTest {
     @Test
     fun viewModel_initialEmptyState_calculatesZeros() = runTest {
         val testDispatcher = UnconfinedTestDispatcher(testScheduler)
-        val testScope = TestScope(testDispatcher)
-        val repository = DefaultDataRepository(storageDir = null, dispatcher = testDispatcher, scope = testScope)
+        val repository = FakeDataRepository()
         val viewModel = ProfileViewModel(repository, testDispatcher)
 
         val state = viewModel.uiState.value
@@ -56,8 +54,7 @@ class ProfileViewModelTest {
     @Test
     fun viewModel_withWorkoutSessions_calculatesStatsCorrectly() = runTest {
         val testDispatcher = UnconfinedTestDispatcher(testScheduler)
-        val testScope = TestScope(testDispatcher)
-        val repository = DefaultDataRepository(storageDir = null, dispatcher = testDispatcher, scope = testScope)
+        val repository = FakeDataRepository()
         
         // Add default exercises
         repository.addWorkoutSession(

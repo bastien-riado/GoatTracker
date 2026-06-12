@@ -1,7 +1,7 @@
 package com.example.goattracker.ui.live
 
 import com.example.goattracker.MainDispatcherRule
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.FakeDataRepository
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.TrackingType
@@ -32,10 +32,8 @@ class LiveWorkoutViewModelTest {
     )
 
     // --- Helper to create a fresh ViewModel ---
-    private fun createTestViewModel(testScheduler: kotlinx.coroutines.test.TestCoroutineScheduler, startSession: Boolean = true): Pair<LiveWorkoutViewModel, DefaultDataRepository> {
-        val testDispatcher = UnconfinedTestDispatcher(testScheduler)
-        val testScope = TestScope(testDispatcher)
-        val repository = DefaultDataRepository(storageDir = null, dispatcher = testDispatcher, scope = testScope)
+    private fun createTestViewModel(testScheduler: kotlinx.coroutines.test.TestCoroutineScheduler, startSession: Boolean = true): Pair<LiveWorkoutViewModel, FakeDataRepository> {
+        val repository = FakeDataRepository()
         val viewModel = LiveWorkoutViewModel(
             dataRepository = repository,
             restTimer = FakeRestTimer(),
@@ -323,9 +321,7 @@ class LiveWorkoutViewModelTest {
 
     @Test
     fun activeSession_persistsAsDraft_andResumesAfterProcessDeath() = runTest {
-        val testDispatcher = UnconfinedTestDispatcher(testScheduler)
-        val testScope = TestScope(testDispatcher)
-        val repository = DefaultDataRepository(storageDir = null, dispatcher = testDispatcher, scope = testScope)
+        val repository = FakeDataRepository()
 
         // First VM: start a session and log an exercise.
         val vm1 = LiveWorkoutViewModel(

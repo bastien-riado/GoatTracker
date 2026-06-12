@@ -1,11 +1,9 @@
 package com.example.goattracker.ui.main
 
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.FakeDataRepository
 import junit.framework.TestCase.assertEquals
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
@@ -13,15 +11,7 @@ import org.junit.Test
 class MainScreenViewModelTest {
   @Test
   fun uiState_emitsSuccessWithExercisesAndStats() = runTest {
-    val testDispatcher = UnconfinedTestDispatcher(testScheduler)
-    val testScope = TestScope(testDispatcher)
-    
-    val repository = DefaultDataRepository(
-        storageDir = null,
-        dispatcher = testDispatcher,
-        scope = testScope
-    )
-    
+    val repository = FakeDataRepository()
     val viewModel = MainScreenViewModel(repository)
     val state = viewModel.uiState.first { it is MainScreenUiState.Success }
     

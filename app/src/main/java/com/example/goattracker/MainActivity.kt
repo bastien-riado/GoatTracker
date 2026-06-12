@@ -19,7 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.local.RoomDataRepository
 import com.example.goattracker.health.BodyWeightSyncer
 import com.example.goattracker.health.HealthConnectWeightProvider
 import com.example.goattracker.theme.GoatTrackerTheme
@@ -49,7 +49,7 @@ class MainActivity : ComponentActivity() {
         // cold start. Must run before super.onCreate(). It hands off quickly to the branded
         // Compose SplashScreen below, which shows the app name while the data layer finishes loading.
         installSplashScreen()
-        val repository = DefaultDataRepository.getInstance(filesDir)
+        val repository = RoomDataRepository.getInstance(this)
 
         super.onCreate(savedInstanceState)
 

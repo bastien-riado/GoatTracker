@@ -41,7 +41,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.goattracker.data.DefaultDataRepository
+import com.example.goattracker.data.local.RoomDataRepository
 import com.example.goattracker.domain.MetricFormatter
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
@@ -66,7 +66,7 @@ fun ExerciseDetailScreen(
     // Fix navigation sharing viewmodel bug by injecting unique exerciseId as key
     val viewModel: ExerciseDetailViewModel = viewModel(key = exerciseId) {
         ExerciseDetailViewModel(
-            DefaultDataRepository.getInstance(context.filesDir),
+            RoomDataRepository.getInstance(context),
             exerciseId
         )
     }
