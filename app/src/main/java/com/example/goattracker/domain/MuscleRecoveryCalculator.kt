@@ -36,7 +36,7 @@ data class MuscleStatus(
  */
 class MuscleRecoveryCalculator(
     private val mapper: MuscleGroupMapper = MuscleGroupMapper,
-    private val baseRecoveryHours: Float = 48f,
+    private val baseRecoveryHours: Float = DEFAULT_BASE_RECOVERY_HOURS,
     private val hoursPerSet: Float = 4f,
     private val maxRecoveryHours: Float = 96f,
 ) {
@@ -109,5 +109,8 @@ class MuscleRecoveryCalculator(
     companion object {
         /** Weight of a secondary muscle relative to the primary, v1 of the dose model. */
         const val SECONDARY_CONTRIBUTION = 0.5f
+
+        /** Default base window; the recovery-settings screen shows it for non-overridden muscles. */
+        const val DEFAULT_BASE_RECOVERY_HOURS = 48f
     }
 }

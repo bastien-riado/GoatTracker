@@ -126,15 +126,15 @@ fun CreateExerciseScreen(
             }
 
             // 3. Muscle Group Dropdown
+            val muscleGroups = listOf(
+                "Pectoraux", "Dos", "Épaules", "Quadriceps",
+                "Ischio-jambiers", "Fessiers", "Mollets", "Biceps", "Triceps", "Abdominaux",
+                // For running/rowing-style exercises; intentionally unmapped on the 3D heatmap.
+                "Cardio"
+            )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 FormLabel(text = "Groupe Musculaire Principal")
                 var expanded by remember { mutableStateOf(false) }
-                val muscleGroups = listOf(
-                    "Pectoraux", "Dos", "Épaules", "Quadriceps",
-                    "Ischio-jambiers", "Fessiers", "Mollets", "Biceps", "Triceps", "Abdominaux",
-                    // For running/rowing-style exercises; intentionally unmapped on the 3D heatmap.
-                    "Cardio"
-                )
 
                 ExposedDropdownMenuBox(
                     expanded = expanded,
@@ -167,6 +167,31 @@ fun CreateExerciseScreen(
                         }
                     }
                 }
+            }
+
+            // 3b. Secondary muscles (optional) — weigh half a primary in the recovery engine.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FormLabel(text = "Muscles secondaires (optionnel)")
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    muscleGroups
+                        .filter { it != state.primaryMuscle && it != "Cardio" }
+                        .forEach { muscle ->
+                            SelectableTag(
+                                text = muscle,
+                                isSelected = muscle in state.secondaryMuscles,
+                                onClick = { viewModel.toggleSecondaryMuscle(muscle) }
+                            )
+                        }
+                }
+                Text(
+                    text = "Ils comptent pour moitié dans la fatigue et la récupération (carte musculaire).",
+                    color = Muted,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp)
+                )
             }
 
             // 4. Tracking Type Selectable Grid

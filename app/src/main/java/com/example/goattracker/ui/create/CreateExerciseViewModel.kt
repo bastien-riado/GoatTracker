@@ -21,7 +21,9 @@ data class CreateExerciseUiState(
     val primaryMuscle: String = "",
     val trackingType: TrackingType = TrackingType.WEIGHT_REPS,
     val notes: String = "",
-    val restTimeSeconds: Int = 90
+    val restTimeSeconds: Int = 90,
+    /** Optional, weighed half a primary by the recovery engine. Never contains [primaryMuscle]. */
+    val secondaryMuscles: List<String> = emptyList()
 ) {
     val isSaveEnabled: Boolean
         get() = name.isNotBlank() && primaryMuscle.isNotBlank()
@@ -52,7 +54,8 @@ class CreateExerciseViewModel(
                             primaryMuscle = exercise.primaryMuscle,
                             trackingType = exercise.trackingType,
                             notes = exercise.notes,
-                            restTimeSeconds = exercise.restTimeSeconds
+                            restTimeSeconds = exercise.restTimeSeconds,
+                            secondaryMuscles = exercise.secondaryMuscles
                         )
                     }
                 }
@@ -69,7 +72,25 @@ class CreateExerciseViewModel(
     }
 
     fun updatePrimaryMuscle(muscle: String) {
-        _uiState.update { it.copy(primaryMuscle = muscle) }
+        // Promoting a muscle to primary removes it from the secondaries (a muscle is one or the other).
+        _uiState.update {
+            it.copy(
+                primaryMuscle = muscle,
+                secondaryMuscles = it.secondaryMuscles.filter { m -> m != muscle },
+            )
+        }
+    }
+
+    fun toggleSecondaryMuscle(muscle: String) {
+        _uiState.update { state ->
+            if (muscle == state.primaryMuscle) return@update state
+            val updated = if (muscle in state.secondaryMuscles) {
+                state.secondaryMuscles - muscle
+            } else {
+                state.secondaryMuscles + muscle
+            }
+            state.copy(secondaryMuscles = updated)
+        }
     }
 
     fun selectTrackingType(trackingType: TrackingType) {
@@ -92,7 +113,8 @@ class CreateExerciseViewModel(
                 primaryMuscle = currentState.primaryMuscle,
                 trackingType = currentState.trackingType,
                 notes = currentState.notes,
-                restTimeSeconds = currentState.restTimeSeconds
+                restTimeSeconds = currentState.restTimeSeconds,
+                secondaryMuscles = currentState.secondaryMuscles
             )
             dataRepository.addExercise(newExercise)
             _savedEvents.send(Unit)

@@ -77,4 +77,41 @@ class CreateExerciseViewModelTest {
         assertEquals("Biceps", savedExercise.primaryMuscle)
         assertEquals(TrackingType.WEIGHT_REPS, savedExercise.trackingType)
     }
+
+    @Test
+    fun secondaryMuscles_toggle_saveRoundTrip_andPrimaryPromotionCleansUp() = runTest {
+        val repository = FakeDataRepository()
+        val viewModel = CreateExerciseViewModel(repository)
+
+        viewModel.updateName("Développé Incliné")
+        viewModel.updatePrimaryMuscle("Pectoraux")
+        viewModel.toggleSecondaryMuscle("Triceps")
+        viewModel.toggleSecondaryMuscle("Épaules")
+        // Toggling the primary itself is a no-op.
+        viewModel.toggleSecondaryMuscle("Pectoraux")
+        assertEquals(listOf("Triceps", "Épaules"), viewModel.uiState.value.secondaryMuscles)
+
+        // Promoting a secondary to primary removes it from the secondaries.
+        viewModel.updatePrimaryMuscle("Triceps")
+        assertEquals(listOf("Épaules"), viewModel.uiState.value.secondaryMuscles)
+
+        viewModel.saveExercise()
+        viewModel.savedEvents.first()
+
+        val saved = repository.workoutState.first().exercises.first { it.name == "Développé Incliné" }
+        assertEquals("Triceps", saved.primaryMuscle)
+        assertEquals(listOf("Épaules"), saved.secondaryMuscles)
+    }
+
+    @Test
+    fun editingAnExercise_loadsItsSecondaryMuscles() = runTest {
+        val repository = FakeDataRepository()
+        val bench = repository.workoutState.first().exercises.first()
+        repository.addExercise(bench.copy(secondaryMuscles = listOf("Triceps")))
+
+        val viewModel = CreateExerciseViewModel(repository, bench.id)
+
+        viewModel.uiState.first { it.secondaryMuscles.isNotEmpty() }
+        assertEquals(listOf("Triceps"), viewModel.uiState.value.secondaryMuscles)
+    }
 }

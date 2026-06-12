@@ -49,6 +49,7 @@ import com.example.goattracker.ui.exercise.ExerciseDetailScreen
 import com.example.goattracker.ui.settings.SettingsScreen
 import com.example.goattracker.ui.settings.PatchNotesScreen
 import com.example.goattracker.ui.celebration.SessionCelebrationScreen
+import com.example.goattracker.ui.recovery.RecoverySettingsScreen
 import com.example.goattracker.ui.sessiondetail.SessionDetailScreen
 import com.example.goattracker.ui.templates.TemplateEditorScreen
 import com.example.goattracker.ui.templates.TemplatesScreen
@@ -218,8 +219,12 @@ fun MainNavigation() {
         entry<Settings> {
           SettingsScreen(
             onBackClick = { backStack.removeLastOrNull() },
-            onPatchNotesClick = { backStack.add(PatchNotes) }
+            onPatchNotesClick = { backStack.add(PatchNotes) },
+            onRecoveryClick = { backStack.add(RecoverySettings) }
           )
+        }
+        entry<RecoverySettings> {
+          RecoverySettingsScreen(onBackClick = { backStack.removeLastOrNull() })
         }
         entry<PatchNotes> {
           PatchNotesScreen(onBackClick = { backStack.removeLastOrNull() })

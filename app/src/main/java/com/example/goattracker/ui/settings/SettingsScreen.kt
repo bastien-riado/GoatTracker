@@ -76,6 +76,7 @@ import java.util.Locale
 fun SettingsScreen(
     onBackClick: () -> Unit,
     onPatchNotesClick: () -> Unit,
+    onRecoveryClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Resolve the Activity-scoped UpdateViewModel (same instance UpdateGate uses) so a manual check
@@ -301,6 +302,13 @@ fun SettingsScreen(
                     },
                 )
             }
+
+            // Per-muscle recovery times (feeds the 3D heatmap engine)
+            SettingsRow(
+                icon = Icons.Default.Refresh,
+                label = "Récupération musculaire",
+                onClick = onRecoveryClick,
+            )
 
             // Notes de version (dedicated page)
             SettingsRow(
