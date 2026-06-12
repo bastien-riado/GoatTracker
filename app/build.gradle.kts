@@ -4,6 +4,14 @@ plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
+  alias(libs.plugins.ksp)
+  alias(libs.plugins.room)
+}
+
+// Versioned Room schema snapshots (one JSON per DB version) live in VCS so future ALTERs ship as
+// reviewed migrations and migration tests can diff against the real v1 schema.
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 android {
@@ -88,6 +96,13 @@ android {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
       }
     }
+
+    testOptions {
+      unitTests {
+        // Robolectric: real Android resources + Context on the JVM for Room DAO/repository tests.
+        isIncludeAndroidResources = true
+      }
+    }
 }
 
 kotlin {
@@ -137,6 +152,16 @@ dependencies {
 
   // Serialization JSON
   implementation(libs.kotlinx.serialization.json)
+
+  // Room — local database (suspend/Flow APIs live in room-runtime since 2.7)
+  implementation(libs.androidx.room.runtime)
+  ksp(libs.androidx.room.compiler)
+  // Room on the host JVM: Robolectric supplies Context, the bundled SQLite driver replaces the
+  // emulator/framework SQLite so DAO tests run as plain unit tests.
+  testImplementation(libs.robolectric)
+  testImplementation(libs.androidx.test.core)
+  testImplementation(libs.androidx.room.testing)
+  testImplementation(libs.androidx.sqlite.bundled)
 
   // 3D rendering — muscle heatmap body model (SceneView, Filament backend)
   implementation(libs.sceneview)
