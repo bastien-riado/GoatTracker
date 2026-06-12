@@ -52,6 +52,31 @@ import kotlin.math.sin
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+private fun CadenceCard(
+    label: String,
+    value: String,
+    caption: String,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = SurfaceElevated),
+        modifier = modifier.border(1.dp, BorderSoft, RoundedCornerShape(12.dp))
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(label, color = Muted, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp), maxLines = 1)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = value,
+                color = AccentSecondary,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold)
+            )
+            Text(caption, color = Muted, fontSize = 10.sp, maxLines = 1)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 fun ProfileScreen(
     onBackClick: () -> Unit,
     onSessionsClick: () -> Unit,
@@ -180,6 +205,58 @@ fun ProfileScreen(
                 }
             }
 
+            // 1a-bis. Training cadence: the "am I consistent?" row.
+            state.cadence?.let { cadence ->
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CadenceCard(
+                            label = "CETTE SEMAINE",
+                            value = "${cadence.sessionsThisWeek}",
+                            caption = "séance${if (cadence.sessionsThisWeek > 1) "s" else ""}",
+                            modifier = Modifier.weight(1f)
+                        )
+                        CadenceCard(
+                            label = "MOYENNE / SEM",
+                            value = String.format(Locale.FRANCE, "%.1f", cadence.averagePerWeekLast4),
+                            caption = "sur 4 semaines",
+                            modifier = Modifier.weight(1f)
+                        )
+                        CadenceCard(
+                            label = "RÉGULARITÉ",
+                            value = "${cadence.streakWeeks}",
+                            caption = "sem. d'affilée",
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CadenceCard(
+                            label = "TEMPS D'ENTRAÎNEMENT",
+                            value = MetricFormatter.duration(
+                                cadence.totalDurationSeconds.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                            ),
+                            caption = "cumulé",
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (cadence.totalDistanceKm > 0) {
+                            CadenceCard(
+                                label = "DISTANCE CARDIO",
+                                value = MetricFormatter.distance(cadence.totalDistanceKm),
+                                caption = "cumulée",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+
             // 1b. 3D muscle heatmap entry point
             item {
                 Card(
@@ -247,6 +324,35 @@ fun ProfileScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(Icons.Default.List, contentDescription = null, tint = Accent)
+                        }
+                    }
+                }
+            }
+
+            // 1d. Body-weight curve — first consumer of the body_weight_log history.
+            if (state.bodyWeightHistory.size >= 2) {
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceElevated),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, BorderSoft, RoundedCornerShape(12.dp))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            Text("POIDS DE CORPS", color = Muted, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp))
+                            Text("Évolution du poids", color = Fg, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                            Spacer(modifier = Modifier.height(16.dp))
+                            OneRepMaxLineChart(
+                                points = state.bodyWeightHistory.map { it.measuredAt to it.weightKg },
+                                weightUnit = state.userProfile.weightUnit,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(160.dp)
+                            )
                         }
                     }
                 }

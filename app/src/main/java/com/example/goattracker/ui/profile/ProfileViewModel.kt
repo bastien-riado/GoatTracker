@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.goattracker.data.DataRepository
 import com.example.goattracker.domain.OneRepMaxFormula
 import com.example.goattracker.domain.OneRepMaxStrategy
+import com.example.goattracker.domain.ProfileCadence
+import com.example.goattracker.domain.ProfileInsights
 import com.example.goattracker.domain.WorkoutMetrics
 import com.example.goattracker.domain.model.*
 import kotlinx.coroutines.CoroutineDispatcher
@@ -23,12 +25,17 @@ data class ProfileUiState(
     val oneRepMaxEvolution: List<Pair<Long, Double>> = emptyList(), // Timestamp -> 1RM kg
     val muscleGroupSets: Map<String, Int> = emptyMap(), // Muscle -> Sets count
     val sessionVolumes: List<Pair<String, Double>> = emptyList(), // Session Name -> Tonnage kg
-    val userProfile: UserProfile = UserProfile()
+    val userProfile: UserProfile = UserProfile(),
+    /** Training cadence + lifetime totals (see ProfileInsights). Null until first computation. */
+    val cadence: ProfileCadence? = null,
+    /** Body-weight observations, oldest first — the weight curve's data. */
+    val bodyWeightHistory: List<BodyWeightEntry> = emptyList()
 )
 
 class ProfileViewModel(
     private val dataRepository: DataRepository,
-    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val now: () -> Long = System::currentTimeMillis
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -41,6 +48,11 @@ class ProfileViewModel(
         viewModelScope.launch(defaultDispatcher) {
             dataRepository.workoutState.collect { state ->
                 calculateStats(state)
+            }
+        }
+        viewModelScope.launch(defaultDispatcher) {
+            dataRepository.bodyWeightHistory.collect { history ->
+                _uiState.update { it.copy(bodyWeightHistory = history) }
             }
         }
     }
@@ -95,7 +107,8 @@ class ProfileViewModel(
                 selectedExercise = currentSelected,
                 muscleGroupSets = muscleSetsMap,
                 sessionVolumes = sessionVolumes,
-                userProfile = state.userProfile
+                userProfile = state.userProfile,
+                cadence = ProfileInsights.cadence(state.sessions, now())
             )
         }
 
