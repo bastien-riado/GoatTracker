@@ -18,9 +18,11 @@ import com.example.goattracker.domain.model.WorkoutSet
 import com.example.goattracker.domain.model.WorkoutState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.After
@@ -54,7 +56,12 @@ class LegacyJsonImporterTest {
 
     @After
     fun tearDown() {
-        scope.cancel()
+        // Same rationale as RoomDataRepositoryTest: join the repository scope before closing the
+        // db, or an in-flight query throws "connection is closed" into the next test's report.
+        runBlocking {
+            scope.cancel()
+            scope.coroutineContext[Job]?.join()
+        }
         db.close()
         dir.deleteRecursively()
     }

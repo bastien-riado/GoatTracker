@@ -48,6 +48,7 @@ import com.example.goattracker.ui.bodyheatmap.BodyHeatmapScreen
 import com.example.goattracker.ui.exercise.ExerciseDetailScreen
 import com.example.goattracker.ui.settings.SettingsScreen
 import com.example.goattracker.ui.settings.PatchNotesScreen
+import com.example.goattracker.ui.celebration.SessionCelebrationScreen
 import com.example.goattracker.ui.sessiondetail.SessionDetailScreen
 import com.example.goattracker.ui.templates.TemplateEditorScreen
 import com.example.goattracker.ui.templates.TemplatesScreen
@@ -145,7 +146,12 @@ fun MainNavigation() {
               // Push the full create screen on top of the live session. The LiveWorkout entry stays
               // in the backstack, so the session (and its ViewModel) is preserved; on save the user
               // returns to the intact session and the new exercise is auto-added (see ViewModel).
-              onCreateExercise = { backStack.add(CreateExercise()) }
+              onCreateExercise = { backStack.add(CreateExercise()) },
+              // "Terminer" with something saved: swap the live entry for the celebration.
+              onSessionFinished = { id ->
+                  backStack.removeLastOrNull()
+                  backStack.add(SessionCelebration(id))
+              }
           )
         }
         entry<Profile> {
@@ -185,6 +191,18 @@ fun MainNavigation() {
             sessionId = key.sessionId,
             onBackClick = { backStack.removeLastOrNull() },
             onExerciseClick = { id -> backStack.add(ExerciseDetail(id)) }
+          )
+        }
+        entry<SessionCelebration> { key ->
+          SessionCelebrationScreen(
+            sessionId = key.sessionId,
+            onClose = { backStack.removeLastOrNull() },
+            // Replace the celebration with the full recap: back from there goes home, not back to
+            // the confetti.
+            onOpenRecap = {
+                backStack.removeLastOrNull()
+                backStack.add(SessionDetail(key.sessionId))
+            }
           )
         }
         entry<BodyHeatmap> {

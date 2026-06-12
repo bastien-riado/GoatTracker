@@ -15,4 +15,5 @@ import kotlinx.serialization.Serializable
 @Serializable data object Templates : NavKey
 @Serializable data class TemplateEditor(val templateId: String? = null) : NavKey
 @Serializable data class SessionDetail(val sessionId: String) : NavKey
+@Serializable data class SessionCelebration(val sessionId: String) : NavKey
 

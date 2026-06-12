@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.goattracker.data.DataRepository
 import com.example.goattracker.domain.model.*
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 data class LiveWorkoutUiState(
@@ -368,8 +370,12 @@ class LiveWorkoutViewModel(
         _uiState.update { it.copy(isFinishModalOpen = false) }
     }
 
-    fun confirmSaveSession() {
-        val currentSession = _uiState.value.activeSession ?: return
+    /**
+     * Saves and ends the session. Returns the saved session's id (the celebration screen loads it
+     * by id), or null when nothing was worth saving (no completed set) — caller just exits then.
+     */
+    fun confirmSaveSession(): String? {
+        val currentSession = _uiState.value.activeSession ?: return null
 
         // Stop all timers
         elapsedTimerJob?.cancel()
@@ -378,24 +384,33 @@ class LiveWorkoutViewModel(
         // Same finish rule as the out-of-screen path (ActiveSessionController, notification
         // "Terminer"): drop incomplete sets / empty exercises and stamp the end time. Shared via
         // toFinishedOrNull so the two finish paths cannot drift apart.
-        currentSession.toFinishedOrNull(System.currentTimeMillis())?.let { finishedSession ->
-            viewModelScope.launch {
-                dataRepository.addWorkoutSession(finishedSession)
+        val finishedSession = currentSession.toFinishedOrNull(System.currentTimeMillis())
+        viewModelScope.launch {
+            // The screen pops right after this call and the per-entry ViewModel is cleared with
+            // it: a plain viewModelScope write could be CANCELLED mid-flight and lose the session
+            // (the legacy JSON repo updated its in-memory state synchronously; Room suspends all
+            // the way to the commit). NonCancellable + save-then-clear order: if the process dies
+            // between the two, the draft resurrects and re-finishing de-dupes by id.
+            withContext(NonCancellable) {
+                finishedSession?.let { dataRepository.addWorkoutSession(it) }
+                dataRepository.saveActiveDraft(null)
             }
         }
-        // The session is over — clear the persisted draft so it isn't resumed next time.
-        persistDraft(null)
         // Reset to a clean slate so re-entering the screen starts a brand-new session. Primary fix
         // is per-entry VM scoping (Navigation.kt); this is defense-in-depth if the VM is ever reused.
         _uiState.update { LiveWorkoutUiState(availableExercises = it.availableExercises) }
+        return finishedSession?.id
     }
 
     fun discardSession() {
         // Stop all timers, don't save anything
         elapsedTimerJob?.cancel()
         restTimer.cancelAll()
-        // Discarding must NOT leave a resumable draft behind.
-        persistDraft(null)
+        // Discarding must NOT leave a resumable draft behind — and must survive the screen pop
+        // (same cancellation window as the finish path).
+        viewModelScope.launch {
+            withContext(NonCancellable) { dataRepository.saveActiveDraft(null) }
+        }
         // Reset to a clean slate so re-entering the screen starts a brand-new session.
         _uiState.update { LiveWorkoutUiState(availableExercises = it.availableExercises) }
     }

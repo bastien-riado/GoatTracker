@@ -48,6 +48,8 @@ fun LiveWorkoutScreen(
     sessionId: String?,
     onSessionExit: () -> Unit,
     onCreateExercise: () -> Unit,
+    /** Saved session id after "Terminer" — the navigation layer opens the celebration with it. */
+    onSessionFinished: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -417,8 +419,9 @@ fun LiveWorkoutScreen(
                         // Button 1: Enregistrer (Save)
                         Button(
                             onClick = {
-                                viewModel.confirmSaveSession()
-                                onSessionExit()
+                                val finishedId = viewModel.confirmSaveSession()
+                                // Celebrate when something was saved; an empty session just exits.
+                                if (finishedId != null) onSessionFinished(finishedId) else onSessionExit()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
                             contentPadding = PaddingValues(vertical = 14.dp),
