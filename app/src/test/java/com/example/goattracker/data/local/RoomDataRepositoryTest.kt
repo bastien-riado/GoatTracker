@@ -51,9 +51,20 @@ class RoomDataRepositoryTest {
         db.close()
     }
 
-    /** A ready repository over [db]; tests can spin up a second one to simulate an app restart. */
+    /**
+     * A ready repository over [db]; tests can spin up a second one to simulate an app restart.
+     * Clocks are injected and disjoint (seed @1000+, mutations @1h+) because catalog order is
+     * createdAt-based: with wall clocks, a fast test could add an exercise within the seed's
+     * 4-millisecond createdAt spread and land in the middle of the presets.
+     */
     private suspend fun repository(): RoomDataRepository {
-        val repo = RoomDataRepository(db = db, scope = scope)
+        val clock = java.util.concurrent.atomic.AtomicLong(3_600_000L)
+        val repo = RoomDataRepository(
+            db = db,
+            scope = scope,
+            initializer = { DefaultSeed.seed(it, 1_000L) },
+            now = { clock.incrementAndGet() },
+        )
         repo.isReady.first { it }
         return repo
     }

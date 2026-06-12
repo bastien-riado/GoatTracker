@@ -168,6 +168,9 @@ class RoomDataRepository(
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: RoomDataRepository(
                     db = GoatTrackerDatabase.build(context.applicationContext),
+                    // First launch after the app update: migrate the legacy workouts.json (or seed
+                    // the defaults when there is none). filesDir is where the legacy repo wrote.
+                    initializer = LegacyJsonImporter(context.applicationContext.filesDir)::run,
                 ).also { INSTANCE = it }
             }
         }

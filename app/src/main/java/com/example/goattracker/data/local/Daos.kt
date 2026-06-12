@@ -232,3 +232,44 @@ interface AppMetaDao {
     @Upsert
     suspend fun put(entry: AppMetaEntity)
 }
+
+/**
+ * First-run import of the legacy workouts.json, as one atomic batch. Everything inserts with
+ * IGNORE so a crash before the init marker lands simply re-runs the import to convergence —
+ * existing rows (catalog wins over embedded historical copies, first occurrence wins among
+ * duplicates) are never overwritten.
+ */
+@Dao
+interface ImportDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertExercises(rows: List<ExerciseEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertMuscles(rows: List<ExerciseMuscleEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertSessions(rows: List<WorkoutSessionEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertEntries(rows: List<ExerciseEntryEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertSets(rows: List<SetEntryEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertProfile(row: UserProfileEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertBodyWeightLog(row: BodyWeightLogEntity)
+
+    @Transaction
+    suspend fun importAll(plan: LegacyImportPlan) {
+        insertExercises(plan.exercises)
+        insertMuscles(plan.muscles)
+        insertSessions(plan.sessions)
+        insertEntries(plan.entries)
+        insertSets(plan.sets)
+        plan.profile?.let { insertProfile(it) }
+        plan.bodyWeightLog?.let { insertBodyWeightLog(it) }
+    }
+}

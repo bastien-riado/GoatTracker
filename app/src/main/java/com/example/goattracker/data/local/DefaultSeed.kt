@@ -6,11 +6,15 @@ import com.example.goattracker.domain.model.TrackingType
 
 /**
  * The preset catalog seeded on first launch (fresh install, or corrupt/absent legacy file).
- * Moved verbatim from the legacy JSON repository so the out-of-the-box experience is unchanged.
+ * Moved verbatim from the legacy JSON repository so the out-of-the-box experience is unchanged —
+ * except the ids: presets get FIXED ids (the legacy repo randomized them) so a crash-interrupted
+ * seed retries to the exact same rows instead of minting duplicates. Existing users keep their
+ * random preset ids through the JSON import; fixed ids only ever apply to fresh databases.
  */
 internal object DefaultSeed {
     fun exercises(): List<Exercise> = listOf(
         Exercise(
+            id = "preset-developpe-couche",
             name = "Développé Couché",
             category = ExerciseCategory.PUSH,
             primaryMuscle = "Pectoraux",
@@ -18,6 +22,7 @@ internal object DefaultSeed {
             restTimeSeconds = 120,
         ),
         Exercise(
+            id = "preset-tractions-pronation",
             name = "Tractions Pronation",
             category = ExerciseCategory.PULL,
             primaryMuscle = "Dos",
@@ -25,6 +30,7 @@ internal object DefaultSeed {
             restTimeSeconds = 120,
         ),
         Exercise(
+            id = "preset-squat-barre",
             name = "Squat Barre",
             category = ExerciseCategory.LEG,
             primaryMuscle = "Quadriceps",
@@ -32,6 +38,7 @@ internal object DefaultSeed {
             restTimeSeconds = 150,
         ),
         Exercise(
+            id = "preset-course-a-pied",
             name = "Course à pied",
             category = ExerciseCategory.CARDIO,
             primaryMuscle = "Cardio",

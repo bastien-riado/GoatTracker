@@ -30,6 +30,7 @@ abstract class GoatTrackerDatabase : RoomDatabase() {
     abstract fun templateDao(): TemplateDao
     abstract fun muscleRecoveryDao(): MuscleRecoveryDao
     abstract fun appMetaDao(): AppMetaDao
+    abstract fun importDao(): ImportDao
 
     companion object {
         const val NAME = "goattracker.db"
