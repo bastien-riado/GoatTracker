@@ -29,6 +29,13 @@ data class Exercise(
     val restTimeSeconds: Int = 90
 )
 
+enum class SetType(val displayName: String) {
+    WARMUP("Échauffement"),
+    WORKING("Travail"),
+    /** One weight plateau of a drop set — chained plateaus share a [WorkoutSet.dropGroupId]. */
+    DROP("Dégressive")
+}
+
 data class WorkoutSet(
     val id: String = UUID.randomUUID().toString(),
     val setNumber: Int,
@@ -36,7 +43,17 @@ data class WorkoutSet(
     val reps: Int = 0,
     val durationSeconds: Int = 0,
     val distanceKm: Double = 0.0,
-    val isCompleted: Boolean = false
+    val isCompleted: Boolean = false,
+    // Stats-oriented fields, persisted since the Room migration. No UI writes them yet (each lands
+    // with its feature); they default so existing call sites and tests stay untouched.
+    /** When the set was checked off — rest-time/density stats. Null until the capture feature. */
+    val completedAt: Long? = null,
+    /** Per-set perceived effort (1–10), optional. */
+    val rpe: Double? = null,
+    val setType: SetType = SetType.WORKING,
+    /** Orthogonal to [setType]: a plain working set can also be taken to failure. */
+    val isToFailure: Boolean = false,
+    val dropGroupId: String? = null
 )
 
 data class ExerciseSession(
@@ -55,7 +72,15 @@ data class WorkoutSession(
     val startTime: Long = System.currentTimeMillis(),
     val endTime: Long? = null,
     val name: String,
-    val exercises: List<ExerciseSession> = emptyList()
+    val exercises: List<ExerciseSession> = emptyList(),
+    // Stats-oriented fields, persisted since the Room migration; defaulted, no UI writes them yet.
+    val notes: String = "",
+    /** Body weight at session time (kg). Sessions predating the capture have null. */
+    val bodyWeightKg: Double? = null,
+    /** Session-level perceived effort (1–10), input of the sRPE training-load model. */
+    val sessionRpe: Double? = null,
+    /** The workout template this session was launched from, when any (PPL feature). */
+    val templateId: String? = null
 )
 
 data class WorkoutState(

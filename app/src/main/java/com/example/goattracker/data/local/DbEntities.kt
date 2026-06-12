@@ -131,16 +131,11 @@ data class ExerciseEntryEntity(
     val trackingTypeSnapshot: String,
 )
 
-object SetType {
-    const val WARMUP = "WARMUP"
-    const val WORKING = "WORKING"
-    const val DROP = "DROP"
-}
-
 /**
- * One set (ex `WorkoutSet`). Drop sets are chains of rows sharing a `dropGroupId` (each weight
- * plateau is its own row with its achieved reps); `isToFailure` is orthogonal to `setType` because
- * a plain working set can also be taken to failure.
+ * One set (ex `WorkoutSet`). `setType` stores the domain `SetType` enum name (WARMUP/WORKING/DROP).
+ * Drop sets are chains of rows sharing a `dropGroupId` (each weight plateau is its own row with its
+ * achieved reps); `isToFailure` is orthogonal to `setType` because a plain working set can also be
+ * taken to failure.
  */
 @Entity(
     tableName = "set_entry",

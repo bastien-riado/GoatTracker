@@ -96,7 +96,7 @@ class GoatTrackerDatabaseTest {
         isCompleted = true,
         completedAt = null,
         rpe = null,
-        setType = SetType.WORKING,
+        setType = "WORKING",
         isToFailure = false,
         dropGroupId = null,
     )
