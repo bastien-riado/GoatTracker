@@ -5,7 +5,10 @@ import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.ExerciseSession
 import com.example.goattracker.domain.model.SetType
+import com.example.goattracker.domain.model.TemplateEntry
+import com.example.goattracker.domain.model.TemplateTargetMode
 import com.example.goattracker.domain.model.TrackingType
+import com.example.goattracker.domain.model.WorkoutTemplate
 import com.example.goattracker.domain.model.UserProfile
 import com.example.goattracker.domain.model.WeightUnit
 import com.example.goattracker.domain.model.WorkoutSession
@@ -146,6 +149,51 @@ fun WorkoutSession.toEntity(status: String, createdAt: Long, updatedAt: Long): W
         createdAt = createdAt,
         updatedAt = updatedAt,
     )
+
+// ---------- Templates ----------
+
+fun TemplateEntryEntity.toDomain(): TemplateEntry = TemplateEntry(
+    id = id,
+    exerciseId = exerciseId,
+    targetSets = targetSets,
+    targetReps = targetReps,
+    targetWeightKg = targetWeightKg,
+    targetMode = parseOr(targetMode, TemplateTargetMode.REPS),
+    restOverrideSeconds = restOverrideSeconds,
+)
+
+fun TemplateWithEntries.toDomain(): WorkoutTemplate = WorkoutTemplate(
+    id = template.id,
+    name = template.name,
+    notes = template.notes,
+    entries = entries.sortedBy { it.position }.map { it.toDomain() },
+)
+
+fun WorkoutTemplate.toEntity(createdAt: Long, updatedAt: Long): WorkoutTemplateEntity =
+    WorkoutTemplateEntity(
+        id = id,
+        name = name,
+        notes = notes,
+        position = 0, // template list ordering is createdAt-based until a reorder feature exists
+        isArchived = false,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+    )
+
+fun WorkoutTemplate.entryEntities(): List<TemplateEntryEntity> =
+    entries.mapIndexed { index, entry ->
+        TemplateEntryEntity(
+            id = entry.id,
+            templateId = id,
+            exerciseId = entry.exerciseId,
+            position = index,
+            targetSets = entry.targetSets,
+            targetReps = entry.targetReps,
+            targetWeightKg = entry.targetWeightKg,
+            targetMode = entry.targetMode.name,
+            restOverrideSeconds = entry.restOverrideSeconds,
+        )
+    }
 
 // ---------- Profile ----------
 

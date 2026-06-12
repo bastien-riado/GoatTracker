@@ -23,6 +23,11 @@ interface ExerciseDao {
     @Query("SELECT * FROM exercise WHERE id = :id")
     suspend fun getById(id: String): ExerciseEntity?
 
+    /** Archived included: history rendering and template launching both need retired exercises. */
+    @Transaction
+    @Query("SELECT * FROM exercise WHERE id = :id")
+    suspend fun getWithMusclesById(id: String): ExerciseWithMuscles?
+
     @Upsert
     suspend fun upsert(exercise: ExerciseEntity)
 
@@ -199,6 +204,9 @@ interface TemplateDao {
     @Query("SELECT * FROM workout_template WHERE isArchived = 0 ORDER BY position ASC, createdAt ASC")
     fun observeActive(): Flow<List<TemplateWithEntries>>
 
+    @Query("SELECT * FROM workout_template WHERE id = :id")
+    suspend fun getById(id: String): WorkoutTemplateEntity?
+
     @Upsert
     suspend fun upsertTemplate(template: WorkoutTemplateEntity)
 
@@ -208,8 +216,16 @@ interface TemplateDao {
     @Insert
     suspend fun insertEntries(entries: List<TemplateEntryEntity>)
 
+    /** Hard delete: entries CASCADE away, sessions launched from it get templateId SET NULL. */
     @Query("DELETE FROM workout_template WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Transaction
+    suspend fun save(template: WorkoutTemplateEntity, entries: List<TemplateEntryEntity>) {
+        upsertTemplate(template)
+        deleteEntriesFor(template.id)
+        insertEntries(entries)
+    }
 }
 
 @Dao

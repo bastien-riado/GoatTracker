@@ -9,11 +9,14 @@ import com.example.goattracker.domain.model.BodyWeightSource
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.ExerciseSession
+import com.example.goattracker.domain.model.TemplateEntry
+import com.example.goattracker.domain.model.TemplateTargetMode
 import com.example.goattracker.domain.model.TrackingType
 import com.example.goattracker.domain.model.UserProfile
 import com.example.goattracker.domain.model.WeightUnit
 import com.example.goattracker.domain.model.WorkoutSession
 import com.example.goattracker.domain.model.WorkoutSet
+import com.example.goattracker.domain.model.WorkoutTemplate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -218,6 +221,82 @@ class RoomDataRepositoryTest {
         val state = repo.workoutState.first { it.activeDraft == null && it.sessions.size == 1 }
         assertEquals(draft.id, state.sessions.single().id)
         assertEquals(1, state.sessions.single().exercises.single().sets.size)
+    }
+
+    @Test
+    fun templates_crudRoundTrip_preservingListOrderAcrossEdits() = runTest {
+        val repo = repository()
+        val bench = repo.workoutState.first().exercises.first()
+        val pull = repo.workoutState.first().exercises[1]
+        val push = WorkoutTemplate(
+            name = "Push",
+            entries = listOf(
+                TemplateEntry(exerciseId = bench.id, targetSets = 4, targetReps = 8, targetWeightKg = 80.0),
+                TemplateEntry(exerciseId = pull.id, targetSets = 2, targetMode = TemplateTargetMode.AMRAP, targetReps = null),
+            ),
+        )
+        repo.saveWorkoutTemplate(push)
+        repo.saveWorkoutTemplate(WorkoutTemplate(name = "Leg"))
+
+        // Edit the first template: createdAt is preserved so it keeps its list position.
+        repo.saveWorkoutTemplate(push.copy(name = "Push lourd"))
+
+        val templates = repo.templates.first { it.size == 2 }
+        assertEquals(listOf("Push lourd", "Leg"), templates.map { it.name })
+        val saved = templates.first()
+        assertEquals(push.id, saved.id)
+        assertEquals(2, saved.entries.size)
+        assertEquals(TemplateTargetMode.AMRAP, saved.entries[1].targetMode)
+        assertEquals(80.0, saved.entries[0].targetWeightKg!!, 0.0)
+
+        repo.deleteWorkoutTemplate(push.id)
+        assertEquals(listOf("Leg"), repo.templates.first { it.size == 1 }.map { it.name })
+    }
+
+    @Test
+    fun deletingTemplate_nullsTheSessionLink_andSessionsSurvive() = runTest {
+        val repo = repository()
+        val bench = repo.workoutState.first().exercises.first()
+        val template = WorkoutTemplate(
+            name = "Push",
+            entries = listOf(TemplateEntry(exerciseId = bench.id)),
+        )
+        repo.saveWorkoutTemplate(template)
+        repo.addWorkoutSession(
+            WorkoutSession(
+                name = "Push",
+                templateId = template.id,
+                exercises = listOf(
+                    ExerciseSession(
+                        exercise = bench,
+                        sets = listOf(WorkoutSet(setNumber = 1, weight = 80.0, reps = 8, isCompleted = true)),
+                    )
+                ),
+            )
+        )
+        repo.workoutState.first { it.sessions.size == 1 }
+
+        repo.deleteWorkoutTemplate(template.id)
+
+        val session = repo.workoutState.first { st ->
+            st.sessions.singleOrNull()?.templateId == null
+        }.sessions.single()
+        assertEquals("Push", session.name) // the session itself is intact, only the link is gone
+    }
+
+    @Test
+    fun getExercise_resolvesArchivedExercises_unlikeTheCatalogFlow() = runTest {
+        val repo = repository()
+        val bench = repo.workoutState.first().exercises.first()
+        repo.saveWorkoutTemplate(
+            WorkoutTemplate(name = "Push", entries = listOf(TemplateEntry(exerciseId = bench.id)))
+        )
+
+        repo.deleteExercise(bench.id) // referenced by the template => archived
+
+        repo.workoutState.first { st -> st.exercises.none { it.id == bench.id } }
+        assertEquals(bench.name, repo.getExercise(bench.id)?.name)
+        assertEquals(bench.primaryMuscle, repo.getExercise(bench.id)?.primaryMuscle)
     }
 
     @Test

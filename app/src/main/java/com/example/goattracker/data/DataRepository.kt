@@ -4,6 +4,7 @@ import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.UserProfile
 import com.example.goattracker.domain.model.WorkoutSession
 import com.example.goattracker.domain.model.WorkoutState
+import com.example.goattracker.domain.model.WorkoutTemplate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -31,4 +32,18 @@ interface DataRepository {
 
     /** Persist the user profile (body weight, unit preference, Health Connect opt-in). */
     suspend fun saveUserProfile(profile: UserProfile)
+
+    /** Reusable workout templates ("Push", "Pull"...), in user list order. */
+    val templates: Flow<List<WorkoutTemplate>>
+
+    /**
+     * Resolves an exercise by id, ARCHIVED ONES INCLUDED — unlike [WorkoutState.exercises], which
+     * only carries the active catalog. Needed wherever a stored reference (template slot, history
+     * row) must resolve even after the exercise left the catalog.
+     */
+    suspend fun getExercise(exerciseId: String): Exercise?
+
+    suspend fun saveWorkoutTemplate(template: WorkoutTemplate)
+
+    suspend fun deleteWorkoutTemplate(templateId: String)
 }

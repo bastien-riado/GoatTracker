@@ -207,13 +207,7 @@ data class WorkoutTemplateEntity(
     val updatedAt: Long,
 )
 
-object TargetMode {
-    const val REPS = "REPS"
-
-    /** As many reps as possible — the "to failure" planning mode (no target rep count). */
-    const val AMRAP = "AMRAP"
-}
-
+/** `targetMode` stores the domain `TemplateTargetMode` enum name (REPS/AMRAP). */
 @Entity(
     tableName = "template_entry",
     foreignKeys = [

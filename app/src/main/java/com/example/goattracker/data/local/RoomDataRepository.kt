@@ -6,6 +6,7 @@ import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.UserProfile
 import com.example.goattracker.domain.model.WorkoutSession
 import com.example.goattracker.domain.model.WorkoutState
+import com.example.goattracker.domain.model.WorkoutTemplate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -152,6 +154,25 @@ class RoomDataRepository(
             )
         }
         db.profileDao().saveWithBodyWeightLog(profile.toEntity(), candidate)
+    }
+
+    override val templates: Flow<List<WorkoutTemplate>> =
+        db.templateDao().observeActive().map { rows -> rows.map { it.toDomain() } }
+
+    override suspend fun getExercise(exerciseId: String): Exercise? =
+        db.exerciseDao().getWithMusclesById(exerciseId)?.toDomain()
+
+    override suspend fun saveWorkoutTemplate(template: WorkoutTemplate) {
+        val existing = db.templateDao().getById(template.id)
+        val timestamp = now()
+        db.templateDao().save(
+            template.toEntity(createdAt = existing?.createdAt ?: timestamp, updatedAt = timestamp),
+            template.entryEntities(),
+        )
+    }
+
+    override suspend fun deleteWorkoutTemplate(templateId: String) {
+        db.templateDao().deleteById(templateId)
     }
 
     private fun WorkoutSession.entryEntities() =

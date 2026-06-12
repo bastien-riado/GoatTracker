@@ -5,6 +5,7 @@ import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.UserProfile
 import com.example.goattracker.domain.model.WorkoutSession
 import com.example.goattracker.domain.model.WorkoutState
+import com.example.goattracker.domain.model.WorkoutTemplate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -67,5 +68,19 @@ class FakeDataRepository(
 
     override suspend fun saveUserProfile(profile: UserProfile) {
         _workoutState.update { it.copy(userProfile = profile) }
+    }
+
+    private val _templates = MutableStateFlow<List<WorkoutTemplate>>(emptyList())
+    override val templates: Flow<List<WorkoutTemplate>> = _templates.asStateFlow()
+
+    override suspend fun getExercise(exerciseId: String): Exercise? =
+        _workoutState.value.exercises.firstOrNull { it.id == exerciseId }
+
+    override suspend fun saveWorkoutTemplate(template: WorkoutTemplate) {
+        _templates.update { current -> current.filter { it.id != template.id } + template }
+    }
+
+    override suspend fun deleteWorkoutTemplate(templateId: String) {
+        _templates.update { current -> current.filter { it.id != templateId } }
     }
 }
