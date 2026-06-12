@@ -1,5 +1,6 @@
 package com.example.goattracker.data
 
+import com.example.goattracker.domain.model.BodyWeightEntry
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.UserProfile
 import com.example.goattracker.domain.model.WorkoutSession
@@ -35,6 +36,9 @@ interface DataRepository {
 
     /** Reusable workout templates ("Push", "Pull"...), in user list order. */
     val templates: Flow<List<WorkoutTemplate>>
+
+    /** Body-weight observations, oldest first (fed by [saveUserProfile] on every weight change). */
+    val bodyWeightHistory: Flow<List<BodyWeightEntry>>
 
     /**
      * Resolves an exercise by id, ARCHIVED ONES INCLUDED — unlike [WorkoutState.exercises], which

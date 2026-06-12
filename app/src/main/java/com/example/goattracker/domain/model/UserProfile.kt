@@ -25,6 +25,16 @@ enum class BodyWeightSource {
 }
 
 /**
+ * One body-weight observation. The profile only keeps the CURRENT value; the history (fed by the
+ * data layer on every weight change since the Room migration) is what weight curves are built on.
+ */
+data class BodyWeightEntry(
+    val weightKg: Double,
+    val measuredAt: Long,
+    val source: BodyWeightSource,
+)
+
+/**
  * App-level user profile. The body weight is the single value used to compute volume for every
  * BODYWEIGHT_REPS exercise — past sessions included (deliberate product choice: history aligns with
  * the *current* weight rather than the weight at the time of the session).

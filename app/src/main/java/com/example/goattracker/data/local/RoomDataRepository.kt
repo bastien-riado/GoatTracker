@@ -2,6 +2,8 @@ package com.example.goattracker.data.local
 
 import android.content.Context
 import com.example.goattracker.data.DataRepository
+import com.example.goattracker.domain.model.BodyWeightEntry
+import com.example.goattracker.domain.model.BodyWeightSource
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.UserProfile
 import com.example.goattracker.domain.model.WorkoutSession
@@ -158,6 +160,18 @@ class RoomDataRepository(
 
     override val templates: Flow<List<WorkoutTemplate>> =
         db.templateDao().observeActive().map { rows -> rows.map { it.toDomain() } }
+
+    override val bodyWeightHistory: Flow<List<BodyWeightEntry>> =
+        db.bodyWeightDao().observeAll().map { rows ->
+            rows.map { row ->
+                BodyWeightEntry(
+                    weightKg = row.weightKg,
+                    measuredAt = row.measuredAt,
+                    source = BodyWeightSource.entries.firstOrNull { it.name == row.source }
+                        ?: BodyWeightSource.MANUAL,
+                )
+            }
+        }
 
     override suspend fun getExercise(exerciseId: String): Exercise? =
         db.exerciseDao().getWithMusclesById(exerciseId)?.toDomain()

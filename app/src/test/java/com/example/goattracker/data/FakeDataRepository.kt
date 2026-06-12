@@ -1,6 +1,7 @@
 package com.example.goattracker.data
 
 import com.example.goattracker.data.local.DefaultSeed
+import com.example.goattracker.domain.model.BodyWeightEntry
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.UserProfile
 import com.example.goattracker.domain.model.WorkoutSession
@@ -68,7 +69,18 @@ class FakeDataRepository(
 
     override suspend fun saveUserProfile(profile: UserProfile) {
         _workoutState.update { it.copy(userProfile = profile) }
+        // Mirror the Room behavior: every distinct weight observation feeds the history.
+        val weightKg = profile.bodyWeightKg ?: return
+        val measuredAt = profile.bodyWeightUpdatedAt ?: 0L
+        _bodyWeightHistory.update { current ->
+            val latest = current.lastOrNull()
+            if (latest != null && latest.weightKg == weightKg && latest.measuredAt == measuredAt) current
+            else current + BodyWeightEntry(weightKg, measuredAt, profile.bodyWeightSource)
+        }
     }
+
+    private val _bodyWeightHistory = MutableStateFlow<List<BodyWeightEntry>>(emptyList())
+    override val bodyWeightHistory: Flow<List<BodyWeightEntry>> = _bodyWeightHistory.asStateFlow()
 
     private val _templates = MutableStateFlow<List<WorkoutTemplate>>(emptyList())
     override val templates: Flow<List<WorkoutTemplate>> = _templates.asStateFlow()

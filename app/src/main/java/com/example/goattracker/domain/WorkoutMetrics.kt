@@ -66,6 +66,19 @@ object WorkoutMetrics {
         }
     }
 
+    /**
+     * Rep records: for each weight ever lifted (completed sets), the best rep count achieved —
+     * the heaviest [limit] tiers, descending. "8 reps @ 100 kg" is a record the e1RM hides; this
+     * is the raw material for the exercise page's "records de répétitions".
+     */
+    fun repRecords(sets: List<WorkoutSet>, limit: Int = 3): List<Pair<Double, Int>> =
+        sets.asSequence()
+            .filter { it.isCompleted && it.weight > 0.0 && it.reps > 0 }
+            .groupBy { it.weight }
+            .map { (weight, group) -> weight to group.maxOf { it.reps } }
+            .sortedByDescending { it.first }
+            .take(limit)
+
     /** Average pace over one set, in seconds per km. Null when distance or duration is missing. */
     fun paceSecPerKm(durationSeconds: Int, distanceKm: Double): Double? =
         if (durationSeconds <= 0 || distanceKm <= 0.0) null
