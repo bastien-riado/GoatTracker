@@ -9,9 +9,10 @@ import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 /**
- * DAOs are deliberately single-statement: multi-step writes (replace a session's entries, archive
- * vs delete an exercise, the JSON import) are composed in the repository under
- * `database.useWriterConnection`/`withTransaction` so the transaction boundary lives in ONE layer.
+ * Multi-step writes are default interface methods annotated @Transaction: Room generates the
+ * transactional wrapper for them, which is the driver-compatible path — the legacy
+ * `RoomDatabase.withTransaction` extension targets the SupportSQLite executor machinery and is
+ * not safe with `setDriver` (it hangs under the bundled JVM driver).
  */
 @Dao
 interface ExerciseDao {
@@ -49,6 +50,27 @@ interface ExerciseDao {
 
     @Query("DELETE FROM exercise WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Transaction
+    suspend fun save(exercise: ExerciseEntity, muscles: List<ExerciseMuscleEntity>) {
+        upsert(exercise)
+        deleteMuscles(exercise.id)
+        insertMuscles(muscles)
+    }
+
+    /**
+     * Archives instead of deleting when history (or a template) references the exercise: the rows
+     * must survive for the stats joins and the RESTRICT keys enforce it. The user-visible result
+     * is identical — the exercise leaves the catalog list.
+     */
+    @Transaction
+    suspend fun deleteOrArchive(id: String, now: Long) {
+        if (historyReferenceCount(id) > 0 || templateReferenceCount(id) > 0) {
+            archive(id, now)
+        } else {
+            deleteById(id)
+        }
+    }
 }
 
 @Dao
@@ -85,6 +107,40 @@ interface SessionDao {
 
     @Query("DELETE FROM workout_session WHERE status = 'DRAFT' AND id != :exceptId")
     suspend fun deleteOtherDrafts(exceptId: String)
+
+    /** Replaces the whole content subtree (deleting entries CASCADE-deletes their sets). */
+    @Transaction
+    suspend fun replaceContent(
+        session: WorkoutSessionEntity,
+        entries: List<ExerciseEntryEntity>,
+        sets: List<SetEntryEntity>,
+    ) {
+        upsertSession(session)
+        deleteEntriesFor(session.id)
+        insertEntries(entries)
+        insertSets(sets)
+    }
+
+    /** Legacy contract: updating an unknown id is a no-op. */
+    @Transaction
+    suspend fun replaceContentIfExists(
+        session: WorkoutSessionEntity,
+        entries: List<ExerciseEntryEntity>,
+        sets: List<SetEntryEntity>,
+    ) {
+        if (exists(session.id)) replaceContent(session, entries, sets)
+    }
+
+    /** Single-draft invariant, kept by construction. */
+    @Transaction
+    suspend fun saveDraft(
+        session: WorkoutSessionEntity,
+        entries: List<ExerciseEntryEntity>,
+        sets: List<SetEntryEntity>,
+    ) {
+        deleteOtherDrafts(session.id)
+        replaceContent(session, entries, sets)
+    }
 }
 
 @Dao
@@ -97,6 +153,32 @@ interface ProfileDao {
 
     @Upsert
     suspend fun upsert(profile: UserProfileEntity)
+
+    @Query("SELECT * FROM body_weight_log ORDER BY measuredAt DESC, id DESC LIMIT 1")
+    suspend fun latestBodyWeight(): BodyWeightLogEntity?
+
+    @Insert
+    suspend fun insertBodyWeight(row: BodyWeightLogEntity)
+
+    /**
+     * Every distinct weight observation lands in body_weight_log, whatever the source — that
+     * history is what weight curves and at-the-time bodyweight tonnage are built on. Saves that
+     * don't change the observation (unit toggle, Health Connect opt-in...) must not spam the log,
+     * hence the value+timestamp dedup against the latest row.
+     */
+    @Transaction
+    suspend fun saveWithBodyWeightLog(profile: UserProfileEntity, candidate: BodyWeightLogEntity?) {
+        upsert(profile)
+        if (candidate == null) return
+        val latest = latestBodyWeight()
+        if (latest != null &&
+            latest.weightKg == candidate.weightKg &&
+            latest.measuredAt == candidate.measuredAt
+        ) {
+            return
+        }
+        insertBodyWeight(candidate)
+    }
 }
 
 @Dao
