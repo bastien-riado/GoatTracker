@@ -14,10 +14,12 @@ class WorkoutSessionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             ACTION_FINISH_SESSION -> ActiveSessionController.getInstance(context).finishActiveSession()
+            ACTION_COMPLETE_SET -> ActiveSessionController.getInstance(context).completeNextSet()
         }
     }
 
     companion object {
         const val ACTION_FINISH_SESSION = "com.example.goattracker.FINISH_SESSION"
+        const val ACTION_COMPLETE_SET = "com.example.goattracker.COMPLETE_SET"
     }
 }

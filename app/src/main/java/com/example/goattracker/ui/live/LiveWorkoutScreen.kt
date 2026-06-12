@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +70,13 @@ fun LiveWorkoutScreen(
     // in reach. Ending the session still happens only through "Terminer" (save or discard).
     BackHandler(enabled = true) {
         onSessionExit()
+    }
+
+    // Out-of-screen edits (watch/notification "Valider la série") land in the persisted draft
+    // while this screen is backgrounded: re-adopt it on every return to the foreground.
+    LifecycleResumeEffect(Unit) {
+        viewModel.resyncFromDraft()
+        onPauseOrDispose { }
     }
 
     // Start a fresh session when the screen is first displayed

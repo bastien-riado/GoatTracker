@@ -57,6 +57,8 @@ sealed interface SessionAction {
     data object SkipRest : SessionAction
     /** Open the exercise picker on the live screen (the bottom slot's action while it is on top). */
     data object AddExercise : SessionAction
+    /** Check off the next planned set (the watch/notification control surface). */
+    data object CompleteNextSet : SessionAction
 }
 
 /** Seam over the foreground service so the controller core stays testable without Android. */
@@ -136,6 +138,41 @@ class ActiveSessionController(
             SessionAction.SkipRest -> restTimer.acknowledge()
             SessionAction.AddExercise -> _uiEvents.tryEmit(action)
             SessionAction.Open -> Unit // navigation is inherently a UI-layer concern
+            SessionAction.CompleteNextSet -> completeNextSet()
+        }
+    }
+
+    /**
+     * Check off the next planned set from outside the app (the notification action, designed for
+     * watches that mirror notification actions — no vendor SDK involved). Completes the first
+     * incomplete set of the first exercise that still has one (execution order), stamps
+     * [com.example.goattracker.domain.model.WorkoutSet.completedAt] and starts that exercise's
+     * rest timer — exact parity with the in-screen toggle. No-op when nothing is pending.
+     *
+     * Known limit, deliberate: if the live SCREEN is in active foreground at the same moment, its
+     * ViewModel owns the editing state and a simultaneous wrist tap can be overwritten by the next
+     * in-screen edit; the screen re-adopts the draft on every resume, which covers the real-world
+     * flow (wrist taps happen with the phone pocketed/locked).
+     */
+    fun completeNextSet() {
+        scope.launch {
+            val draft = repository.getLatestState().activeDraft ?: return@launch
+            val exerciseSession = draft.exercises.firstOrNull { es -> es.sets.any { !it.isCompleted } }
+                ?: return@launch
+            val target = exerciseSession.sets.first { !it.isCompleted }
+            val updated = draft.copy(
+                exercises = draft.exercises.map { es ->
+                    if (es.id != exerciseSession.id) es
+                    else es.copy(
+                        sets = es.sets.map { set ->
+                            if (set.id == target.id) set.copy(isCompleted = true, completedAt = clock())
+                            else set
+                        }
+                    )
+                }
+            )
+            repository.saveActiveDraft(updated)
+            restTimer.start(exerciseSession.exercise.restTimeSeconds)
         }
     }
 

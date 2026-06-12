@@ -5,6 +5,7 @@ import com.example.goattracker.data.FakeDataRepository
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.TrackingType
+import com.example.goattracker.domain.model.WorkoutSession
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -356,6 +357,75 @@ class LiveWorkoutViewModelTest {
  * In-memory [RestTimer] for tests: no Android, no service, no alarm. Mirrors the contract the
  * ViewModel relies on (state stream + remainingSeconds) so timer-driven UI state can be asserted.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
+class LiveWorkoutViewModelWatchSyncTest {
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
+
+    private val testExercise = Exercise(
+        id = "ex-1",
+        name = "Développé Couché",
+        category = ExerciseCategory.PUSH,
+        primaryMuscle = "Pectoraux",
+        trackingType = TrackingType.WEIGHT_REPS
+    )
+
+    @Test
+    fun togglingASetOn_stampsCompletedAt_andTogglingOffClearsIt() = runTest {
+        val repository = FakeDataRepository()
+        val viewModel = LiveWorkoutViewModel(
+            dataRepository = repository,
+            restTimer = FakeRestTimer(),
+            elapsedTicker = flowOf(Unit),
+            countdownTicker = flowOf(Unit),
+        )
+        viewModel.startOrResumeSession()
+        viewModel.addExerciseToSession(testExercise)
+        val session = viewModel.uiState.value.activeSession!!
+        val setId = session.exercises.single().sets.first().id
+
+        viewModel.toggleSetCompletion(testExercise.id, setId)
+        val completed = viewModel.uiState.value.activeSession!!.exercises.single().sets.first()
+        assertTrue(completed.isCompleted)
+        assertNotNull("completedAt feeds the rest-time stats", completed.completedAt)
+
+        viewModel.toggleSetCompletion(testExercise.id, setId)
+        val unchecked = viewModel.uiState.value.activeSession!!.exercises.single().sets.first()
+        assertFalse(unchecked.isCompleted)
+        assertNull(unchecked.completedAt)
+    }
+
+    @Test
+    fun resyncFromDraft_adoptsExternalEdits_ofTheSameSessionOnly() = runTest {
+        val repository = FakeDataRepository()
+        val viewModel = LiveWorkoutViewModel(
+            dataRepository = repository,
+            restTimer = FakeRestTimer(),
+            elapsedTicker = flowOf(Unit),
+            countdownTicker = flowOf(Unit),
+        )
+        viewModel.startOrResumeSession()
+        viewModel.addExerciseToSession(testExercise)
+        val current = viewModel.uiState.value.activeSession!!
+
+        // Out-of-screen edit (the watch action): first set completed directly in the draft.
+        val external = current.copy(
+            exercises = current.exercises.map { es ->
+                es.copy(sets = es.sets.mapIndexed { i, s -> if (i == 0) s.copy(isCompleted = true, completedAt = 7L) else s })
+            }
+        )
+        repository.saveActiveDraft(external)
+        viewModel.resyncFromDraft()
+        assertTrue(viewModel.uiState.value.activeSession!!.exercises.single().sets.first().isCompleted)
+
+        // A draft belonging to ANOTHER session id must not clobber the on-screen one.
+        repository.saveActiveDraft(WorkoutSession(name = "Autre séance"))
+        viewModel.resyncFromDraft()
+        assertEquals(current.id, viewModel.uiState.value.activeSession!!.id)
+    }
+}
+
 private class FakeRestTimer : RestTimer {
     private val _state = MutableStateFlow<RestTimerState>(RestTimerState.Idle)
     override val state: StateFlow<RestTimerState> = _state

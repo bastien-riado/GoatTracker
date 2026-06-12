@@ -127,6 +127,19 @@ class LiveWorkoutViewModel(
      * process was killed mid-workout), otherwise starts a fresh one. The in-memory guard keeps a
      * recomposition / config change from clobbering a session that's already loaded.
      */
+    /**
+     * Re-adopt the persisted draft when the screen returns to the foreground: out-of-screen edits
+     * (the watch/notification "Valider la série") land in the draft while this ViewModel's state
+     * is frozen in the background. Same-id guard keeps it from clobbering an unrelated session.
+     */
+    fun resyncFromDraft() {
+        val current = _uiState.value.activeSession ?: return
+        val draft = dataRepository.getLatestState().activeDraft ?: return
+        if (draft.id == current.id && draft != current) {
+            updateSessionState(draft)
+        }
+    }
+
     fun startOrResumeSession() {
         if (_uiState.value.activeSession != null) return
         viewModelScope.launch {
@@ -342,7 +355,12 @@ class LiveWorkoutViewModel(
                             startRestTimer = true
                             restTimeForExercise = exSession.exercise.restTimeSeconds
                         }
-                        set.copy(isCompleted = newCompletedState)
+                        // completedAt feeds the future rest-time/density stats; unchecking clears
+                        // it (the set was not actually done at that moment).
+                        set.copy(
+                            isCompleted = newCompletedState,
+                            completedAt = if (newCompletedState) System.currentTimeMillis() else null,
+                        )
                     } else {
                         set
                     }

@@ -200,6 +200,27 @@ class WorkoutSessionService : Service() {
             .setRequestPromotedOngoing(true)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Terminer", finishPendingIntent)
 
+        // "Valider la série" — check off the next planned set from the wrist: notification actions
+        // travel the standard wearable notification bridge (Garmin, COROS, Wear OS… no vendor SDK),
+        // which is exactly why this stays a plain NotificationCompat action. Shown only while no
+        // rest is running (during a rest the slot belongs to "Passer le repos" — watches display
+        // few actions) and only while there is still a set to check.
+        val hasPendingSet = session?.exercises?.any { ex -> ex.sets.any { !it.isCompleted } } == true
+        if (rest is RestTimerState.Idle && hasPendingSet) {
+            val completeSetIntent = Intent(this, WorkoutSessionReceiver::class.java).apply {
+                action = WorkoutSessionReceiver.ACTION_COMPLETE_SET
+            }
+            val completeSetPendingIntent = PendingIntent.getBroadcast(
+                this, 2, completeSetIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            builder.addAction(
+                android.R.drawable.checkbox_on_background,
+                "Valider la série",
+                completeSetPendingIntent,
+            )
+        }
+
         // While a rest is running (or buzzing), surface the skip control out-of-app too. Same
         // receiver/action as the rest notification's "Passer": stops vibration + countdown service
         // and returns the timer to Idle, which re-renders this notification via the combine above.
