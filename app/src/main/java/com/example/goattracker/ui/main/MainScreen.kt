@@ -6,6 +6,7 @@ import com.example.goattracker.CreateExercise
 import com.example.goattracker.LiveWorkout
 import com.example.goattracker.Profile
 import com.example.goattracker.ExerciseDetail
+import com.example.goattracker.Templates
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -17,10 +18,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -49,6 +54,7 @@ import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.TrackingType
 import com.example.goattracker.theme.*
 
+@OptIn(ExperimentalMaterial3Api::class) // ModalBottomSheet (launch chooser)
 @Composable
 fun MainScreen(
     onItemClick: (NavKey) -> Unit,
@@ -65,6 +71,8 @@ fun MainScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
+    val templates by viewModel.templates.collectAsStateWithLifecycle()
+    var showLaunchSheet by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -212,7 +220,11 @@ fun MainScreen(
                     .padding(16.dp)
             ) {
                 Button(
-                    onClick = { onItemClick(LiveWorkout(null)) },
+                    // With templates around, the button opens a chooser (free session / template);
+                    // without any, it keeps its historical direct-launch behavior.
+                    onClick = {
+                        if (templates.isEmpty()) onItemClick(LiveWorkout(null)) else showLaunchSheet = true
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)
@@ -273,6 +285,88 @@ fun MainScreen(
                     modifier = Modifier.size(28.dp)
                 )
             }
+        }
+    }
+
+    if (showLaunchSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showLaunchSheet = false },
+            containerColor = Surface
+        ) {
+            Column(modifier = Modifier.padding(bottom = 24.dp)) {
+                Text(
+                    text = "DÉMARRER UNE SÉANCE",
+                    color = Muted,
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                )
+
+                LaunchSheetRow(
+                    icon = Icons.Default.PlayArrow,
+                    title = "Séance libre",
+                    subtitle = "Construire la séance exercice par exercice",
+                    onClick = {
+                        showLaunchSheet = false
+                        onItemClick(LiveWorkout(null))
+                    }
+                )
+
+                templates.forEach { template ->
+                    LaunchSheetRow(
+                        icon = Icons.Default.PlayArrow,
+                        title = template.name,
+                        subtitle = "${template.entries.size} exercice${if (template.entries.size > 1) "s" else ""} pré-remplis",
+                        onClick = {
+                            showLaunchSheet = false
+                            // The VM persists the pre-filled draft and waits for it to be
+                            // observable BEFORE navigating, so the live screen adopts it instead
+                            // of racing a fresh empty session on top.
+                            viewModel.launchTemplate(template) { onItemClick(LiveWorkout(null)) }
+                        }
+                    )
+                }
+
+                LaunchSheetRow(
+                    icon = Icons.Default.List,
+                    title = "Gérer mes workouts",
+                    subtitle = "Créer ou modifier les séances types",
+                    onClick = {
+                        showLaunchSheet = false
+                        onItemClick(Templates)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LaunchSheetRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Accent.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = Accent, modifier = Modifier.size(20.dp))
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column {
+            Text(title, color = Fg, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+            Text(subtitle, color = Muted, fontSize = 12.sp)
         }
     }
 }

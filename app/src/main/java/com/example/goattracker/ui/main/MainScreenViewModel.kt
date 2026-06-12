@@ -8,6 +8,8 @@ import com.example.goattracker.domain.WorkoutMetrics
 import com.example.goattracker.domain.model.Exercise
 import com.example.goattracker.domain.model.ExerciseCategory
 import com.example.goattracker.domain.model.UserProfile
+import com.example.goattracker.domain.model.WorkoutTemplate
+import com.example.goattracker.ui.templates.TemplateLauncher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -62,6 +64,32 @@ class MainScreenViewModel(private val dataRepository: DataRepository) : ViewMode
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = MainScreenUiState.Loading
     )
+
+    /** Drives the "Démarrer une séance" chooser: empty list = launch a free session directly. */
+    val templates: StateFlow<List<WorkoutTemplate>> = dataRepository.templates.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList(),
+    )
+
+    private val templateLauncher = TemplateLauncher(dataRepository)
+
+    // Double-tap guard: two fast taps in the sheet must not race two draft writes.
+    private var launchingTemplate = false
+
+    /** Persists the pre-filled draft (and awaits its visibility), then [onOpen] navigates. */
+    fun launchTemplate(template: WorkoutTemplate, onOpen: () -> Unit) {
+        if (launchingTemplate) return
+        launchingTemplate = true
+        viewModelScope.launch {
+            try {
+                templateLauncher.launch(template)
+                onOpen()
+            } finally {
+                launchingTemplate = false
+            }
+        }
+    }
 
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query

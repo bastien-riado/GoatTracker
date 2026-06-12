@@ -12,4 +12,6 @@ import kotlinx.serialization.Serializable
 @Serializable data class ExerciseDetail(val exerciseId: String) : NavKey
 @Serializable data object Settings : NavKey
 @Serializable data object PatchNotes : NavKey
+@Serializable data object Templates : NavKey
+@Serializable data class TemplateEditor(val templateId: String? = null) : NavKey
 

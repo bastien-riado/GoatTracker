@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
@@ -56,6 +57,7 @@ fun ProfileScreen(
     onSessionsClick: () -> Unit,
     onBodyHeatmapClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onTemplatesClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -209,6 +211,42 @@ fun ProfileScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(Icons.Default.Star, contentDescription = null, tint = Accent)
+                        }
+                    }
+                }
+            }
+
+            // 1c. Workout templates entry point
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SurfaceElevated),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, BorderSoft, RoundedCornerShape(12.dp))
+                        .clickable { onTemplatesClick() }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("SÉANCES TYPES", color = Muted, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp))
+                            Text("Mes workouts", color = Fg, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("Push, Pull, Leg… à lancer en un geste, exercices déjà en place", color = Muted, fontSize = 11.sp)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Accent.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.List, contentDescription = null, tint = Accent)
                         }
                     }
                 }

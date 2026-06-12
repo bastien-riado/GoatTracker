@@ -48,6 +48,8 @@ import com.example.goattracker.ui.bodyheatmap.BodyHeatmapScreen
 import com.example.goattracker.ui.exercise.ExerciseDetailScreen
 import com.example.goattracker.ui.settings.SettingsScreen
 import com.example.goattracker.ui.settings.PatchNotesScreen
+import com.example.goattracker.ui.templates.TemplateEditorScreen
+import com.example.goattracker.ui.templates.TemplatesScreen
 
 @Composable
 fun MainNavigation() {
@@ -150,7 +152,25 @@ fun MainNavigation() {
             onBackClick = { backStack.removeLastOrNull() },
             onSessionsClick = { backStack.add(SessionsList) },
             onBodyHeatmapClick = { backStack.add(BodyHeatmap) },
-            onSettingsClick = { backStack.add(Settings) }
+            onSettingsClick = { backStack.add(Settings) },
+            onTemplatesClick = { backStack.add(Templates) }
+          )
+        }
+        entry<Templates> {
+          TemplatesScreen(
+            onBackClick = { backStack.removeLastOrNull() },
+            onCreateClick = { backStack.add(TemplateEditor()) },
+            onEditClick = { id -> backStack.add(TemplateEditor(id)) },
+            // The launcher has already persisted (and awaited) the pre-filled draft; opening the
+            // live screen makes startOrResumeSession adopt it like any process-death draft.
+            onLaunched = openSession,
+            hasActiveSession = miniState != null,
+          )
+        }
+        entry<TemplateEditor> { key ->
+          TemplateEditorScreen(
+            templateId = key.templateId,
+            onBackClick = { backStack.removeLastOrNull() }
           )
         }
         entry<SessionsList> {
