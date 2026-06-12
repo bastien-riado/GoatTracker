@@ -161,7 +161,7 @@ dependencies {
   testImplementation(libs.robolectric)
   testImplementation(libs.androidx.test.core)
   testImplementation(libs.androidx.room.testing)
-  testImplementation(libs.androidx.sqlite.bundled)
+  testImplementation(libs.androidx.sqlite.bundled.jvm)
 
   // 3D rendering — muscle heatmap body model (SceneView, Filament backend)
   implementation(libs.sceneview)
