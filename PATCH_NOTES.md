@@ -1,10 +1,27 @@
-Nouveauté : poids du corps, unités et cardio 🏃
+Cette mise à jour ajoute vos séances types, un récapitulatif après chaque entraînement et un suivi beaucoup plus complet.
 
-Vos statistiques deviennent enfin justes, quel que soit le type d'exercice.
+Séances types (Push, Pull, Leg, etc.)
+- Préparez vos modèles de séance avec leurs exercices et leurs objectifs (séries, répétitions, charge).
+- Lancez une séance déjà prête en un seul geste, depuis l'accueil ou la page Mes Workouts.
+- Indiquez si la dernière série doit être faite jusqu'à l'échec.
 
-- Renseignez votre poids corporel dans les Paramètres : les exercices au poids de corps (tractions, dips, pompes…) comptent désormais leur vrai volume en kg, séances passées incluses.
-- Connectez l'application à Santé Connect (si disponible sur votre téléphone) : votre poids se met à jour tout seul à l'ouverture de l'application.
-- Choisissez votre unité : kilogrammes ou livres (lbs), appliquée partout dans l'application.
-- Les exercices « Distance » deviennent de vrais exercices cardio : saisissez distance ET durée, l'application calcule votre allure (min/km) et affiche vos records (distance max, meilleure allure).
-- Le volume total d'une séance ne mélange plus tout : seuls les exercices de force comptent dans le tonnage — une course de 10 km ne vaut plus « 10 000 kg » dans vos statistiques.
-- Les charges décimales s'affichent correctement (22,5 kg ne devient plus « 22 »).
+Récapitulatif de séance
+- À la fin d'une séance, un écran de félicitations affiche vos chiffres clés et met en avant vos nouveaux records.
+- Touchez une séance passée dans l'historique pour voir son détail complet : durée, volume, progression par rapport à la fois précédente et le détail de chaque exercice.
+
+Page d'exercice enrichie
+- Choisissez la formule utilisée pour estimer votre 1RM (Epley, Brzycki, Lander).
+- Retrouvez vos meilleures performances en répétitions pour chaque charge.
+
+Profil
+- Suivez votre régularité : séances de la semaine, moyenne et semaines consécutives.
+- Visualisez l'évolution de votre poids de corps dans le temps.
+
+Récupération musculaire
+- Indiquez les muscles secondaires de vos exercices pour une carte de récupération plus réaliste.
+- Réglez vous-même le temps de récupération de chaque muscle : tout le monde ne récupère pas à la même vitesse.
+
+Contrôle pendant la séance
+- Validez une série ou passez le temps de repos directement depuis la notification, sur l'écran de verrouillage du téléphone et les montres compatibles.
+
+Vos données existantes sont automatiquement conservées lors de la mise à jour.
